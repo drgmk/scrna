@@ -313,97 +313,23 @@ def pca_heatmap(adata, component, layer=None):
                   use_raw=False, layer=layer, vmin=-1, vmax=3)
 
 
-def load_marker_genes(case=None):
-    """Load marker genes from the JSON file included with the package.
-    
-    Parameters
-    ----------
-    case : str, optional
-        Convert gene names to specific case. Options:
-        - 'upper': Convert to uppercase (typical for human genes)
-        - 'lower': Convert to lowercase  
-        - 'title': Convert to title case (typical for mouse genes, e.g., 'Bcl6')
-        - None: Keep original case
-    
-    Returns
-    -------
-    dict
-        Dictionary with cell type/gene set names as keys and lists of gene names as values.
-    """
-    # Get the directory where this module is located
-    module_dir = os.path.dirname(os.path.abspath(__file__))
-    marker_genes_path = os.path.join(module_dir, 'marker_genes.json')
-    
-    try:
-        with open(marker_genes_path, 'r') as f:
-            marker_genes = json.load(f)
-        
-        # Apply case conversion if specified
-        if case is not None:
-            converted_genes = {}
-            for gene_set, genes in marker_genes.items():
-                if case.lower() == 'upper':
-                    converted_genes[gene_set] = [gene.upper() for gene in genes]
-                elif case.lower() == 'lower':
-                    converted_genes[gene_set] = [gene.lower() for gene in genes]
-                elif case.lower() == 'title':
-                    converted_genes[gene_set] = [gene.capitalize() for gene in genes]
-                else:
-                    print(f"Warning: Unknown case option '{case}'. Valid options are 'upper', 'lower', 'title', or None.")
-                    converted_genes[gene_set] = genes
-            return converted_genes
-        
-        return marker_genes
-    except FileNotFoundError:
-        print(f"Marker genes file not found at {marker_genes_path}")
-        return {}
-    except json.JSONDecodeError:
-        print(f"Error reading marker genes file at {marker_genes_path}")
-        return {}
-
-
-def filter_genes_in_adata(marker_genes, adata):
-    """Filter marker genes to only include those present in the AnnData object.
-    
-    Parameters
-    ----------
-    marker_genes : dict
-        Dictionary with gene set names as keys and lists of gene names as values.
-    adata : AnnData
-        Annotated data matrix containing gene names in var_names.
-    
-    Returns
-    -------
-    dict
-        Filtered dictionary with only genes present in adata.var_names.
-    """
-    filtered_genes = {}
-    for gene_set, genes in marker_genes.items():
-        filtered_genes[gene_set] = [gene for gene in genes if gene in adata.var_names]
-        missing_genes = [gene for gene in genes if gene not in adata.var_names]
-        if missing_genes:
-            print(f"Missing genes in {gene_set}: {missing_genes}")
-    
-    return filtered_genes
-
-
-def load_cell_cycle_genes(case=None):
+def load_cell_cycle_genes(organism, gene_list=None):
     """Load cell cycle genes from the Tirosh et al. file included with the package.
     
     Parameters
     ----------
-    case : str, optional
-        Convert gene names to specific case. Options:
-        - 'upper': Convert to uppercase (typical for human genes)
-        - 'lower': Convert to lowercase  
-        - 'title': Convert to title case (typical for mouse genes, e.g., 'Bcl6')
-        - None: Keep original case
+    organism : str
+        Target organism to determine gene name case. Options:
+        - 'human': uppercase genes (e.g., 'FOXP3')
+        - 'mouse': title case genes (e.g., 'Foxp3')
+    gene_list : list, optional
+        List of gene names to filter against (e.g., adata.var_names).
+        If provided, only genes present in this list will be returned.
     
     Returns
     -------
     dict
         Dictionary with 's_genes' and 'g2m_genes' as keys and lists of gene names as values.
-        Also includes 'all_genes' key with all cell cycle genes.
     """
     # Get the directory where this module is located
     module_dir = os.path.dirname(os.path.abspath(__file__))
@@ -417,35 +343,44 @@ def load_cell_cycle_genes(case=None):
         s_genes = cell_cycle_genes[:43]
         g2m_genes = cell_cycle_genes[43:]
         
-        # Apply case conversion if specified
-        if case is not None:
-            if case.lower() == 'upper':
-                s_genes = [gene.upper() for gene in s_genes]
-                g2m_genes = [gene.upper() for gene in g2m_genes]
-                all_genes = [gene.upper() for gene in cell_cycle_genes]
-            elif case.lower() == 'lower':
-                s_genes = [gene.lower() for gene in s_genes]
-                g2m_genes = [gene.lower() for gene in g2m_genes]
-                all_genes = [gene.lower() for gene in cell_cycle_genes]
-            elif case.lower() == 'title':
-                s_genes = [gene.capitalize() for gene in s_genes]
-                g2m_genes = [gene.capitalize() for gene in g2m_genes]
-                all_genes = [gene.capitalize() for gene in cell_cycle_genes]
-            else:
-                print(f"Warning: Unknown case option '{case}'. Valid options are 'upper', 'lower', 'title', or None.")
-                all_genes = cell_cycle_genes
+        # Apply case conversion based on organism
+        if organism.lower() == 'human':
+            s_genes = [gene.upper() for gene in s_genes]
+            g2m_genes = [gene.upper() for gene in g2m_genes]
+        elif organism.lower() == 'mouse':
+            s_genes = [gene.capitalize() for gene in s_genes]
+            g2m_genes = [gene.capitalize() for gene in g2m_genes]
         else:
-            all_genes = cell_cycle_genes
+            raise ValueError(f"Unknown organism '{organism}'. Valid options are 'human' or 'mouse'.")
+        
+        # Filter genes if gene_list is provided
+        if gene_list is not None:
+            gene_set = set(gene_list)
+            s_genes_filtered = [gene for gene in s_genes if gene in gene_set]
+            g2m_genes_filtered = [gene for gene in g2m_genes if gene in gene_set]
+            
+            # Report missing genes
+            missing_s = [gene for gene in s_genes if gene not in gene_set]
+            missing_g2m = [gene for gene in g2m_genes if gene not in gene_set]
+            
+            if missing_s:
+                print(f"Missing S phase genes: {missing_s}")
+            if missing_g2m:
+                print(f"Missing G2M phase genes: {missing_g2m}")
+            
+            return {
+                's_genes': s_genes_filtered,
+                'g2m_genes': g2m_genes_filtered,
+            }
         
         return {
             's_genes': s_genes,
             'g2m_genes': g2m_genes,
-            'all_genes': all_genes
         }
         
     except FileNotFoundError:
         print(f"Cell cycle genes file not found at {tirosh_file_path}")
-        return {'s_genes': [], 'g2m_genes': [], 'all_genes': []}
+        return {'s_genes': [], 'g2m_genes': []}
     except Exception as e:
         print(f"Error reading cell cycle genes file: {e}")
-        return {'s_genes': [], 'g2m_genes': [], 'all_genes': []}
+        return {'s_genes': [], 'g2m_genes': []}
