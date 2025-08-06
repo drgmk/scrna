@@ -1,4 +1,39 @@
 {
+  "B cells": {
+    "genes": [
+      "CD19",
+      "CD20",
+      "CD22",
+      "CD79A",
+      "CD79B",
+      "MS4A1",
+      "IGHM"
+    ],
+    "genes_secondary": [
+      "IGLC2",
+      "IGLC3"
+    ],
+    "references": {},
+    "aliases": [],
+    "short_name": "B cells"
+  },
+  "T cells": {
+    "genes": [
+      "CD3D",
+      "CD3E",
+      "CD3G",
+      "CD4",
+      "CD8A",
+      "CD8B",
+      "TRAC",
+      "TRBC1",
+      "TRBC2"
+    ],
+    "genes_secondary": [],
+    "references": {},
+    "aliases": [],
+    "short_name": "T cells"
+  },
   "Regulatory T cells": {
     "genes": [
       "FOXP3",
@@ -15,22 +50,26 @@
   },
   "GC B cells": {
     "genes": [
-      "BCL6",
       "AICDA",
       "S1PR2",
+      "PCNA",
+      "MKI67"
+    ],
+    "genes_secondary": [
+      "BCL6",
       "CXCR4",
       "MYC",
-      "PCNA",
-      "MKI67",
       "FOXO1"
     ],
-    "genes_secondary": [],
     "references": {
       "ML": {
         "genes_added": "BCL6, AICDA, S1PR2, CXCR4, MYC, PCNA, MKI67, FOXO1",
         "doi": "none"
       }
     },
+    "notes": [
+      "some genes don't seem to be very specific, downgraded to secondary list"
+    ],
     "aliases": ["GCB", "Germinal center B cells"],
     "short_name": "GCB"
   },
@@ -85,40 +124,17 @@
     "aliases": ["GC DZ"],
     "short_name": "GC DZ"
   },
-  "B cells": {
+  "Naive T cells": {
     "genes": [
-      "CD19",
-      "CD20",
-      "CD22",
-      "CD79A",
-      "CD79B",
-      "MS4A1",
-      "IGHM",
-      "IGHD",
-      "IGLC2",
-      "IGLC3"
+      "SELPLG",
+      "CCR7",
+      "S1PR1",
+      "SELL"
     ],
     "genes_secondary": [],
     "references": {},
     "aliases": [],
-    "short_name": "B cells"
-  },
-  "T cells": {
-    "genes": [
-      "CD3D",
-      "CD3E",
-      "CD3G",
-      "CD4",
-      "CD8A",
-      "CD8B",
-      "TRAC",
-      "TRBC1",
-      "TRBC2"
-    ],
-    "genes_secondary": [],
-    "references": {},
-    "aliases": [],
-    "short_name": "T cells"
+    "short_name": "Naive T cells"
   },
   "T follicular helper cells": {
     "genes": [
@@ -145,17 +161,22 @@
     "aliases": ["GC TfH", "TfH", "Tfh"],
     "short_name": "TfH"
   },
-  "Naive T cells": {
+  "T cell reticular cells": {
     "genes": [
-      "SELPLG",
-      "CCR7",
-      "S1PR1",
-      "SELL"
+      "CCL19",
+      "CCL21",
+      "CLU",
+      "VCAM"
     ],
     "genes_secondary": [],
-    "references": {},
-    "aliases": [],
-    "short_name": "Naive T cells"
+    "references": {
+      "Lutge et al. 2025": {
+        "genes_added": "CCL19, CCL21, CLU, VCAM",
+        "doi": "10.1126/sciimmunol.ads6820"
+      }
+    },
+    "aliases": ["TRC"],
+    "short_name": "TRC"
   },
   "Follicular reticular cells": {
     "genes": [
@@ -219,8 +240,6 @@
       "RGS9",
       "BCL2A1",
       "MATN2",
-      "CR1",
-      "CR2",
       "SRGN",
       "PAPPA",
       "FCAMR",
@@ -297,22 +316,5 @@
     },
     "aliases": ["VSMC"],
     "short_name": "VSMC"
-  },
-  "T cell reticular cells": {
-    "genes": [
-      "CCL19",
-      "CCL21",
-      "CLU",
-      "VCAM"
-    ],
-    "genes_secondary": [],
-    "references": {
-      "Lutge et al. 2025": {
-        "genes_added": "CCL19, CCL21, CLU, VCAM",
-        "doi": "10.1126/sciimmunol.ads6820"
-      }
-    },
-    "aliases": ["TRC"],
-    "short_name": "TRC"
   }
 }
