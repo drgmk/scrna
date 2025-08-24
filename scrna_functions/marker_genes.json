@@ -17,6 +17,30 @@
     "aliases": [],
     "short_name": "B cells"
   },
+  "B cell follicle cells": {
+    "genes": [
+      "CD19",
+      "MS4A1",
+      "CD22",
+      "CD79A",
+      "CD79B",
+      "CXCR5",
+      "IGHM",
+      "IGHD",
+      "BANK1",
+      "PAX5",
+      "TCL1A"
+    ],
+  "genes_secondary": [],
+  "references": {
+    "chatGPT": {
+        "genes_added": "CD19, MS4A1, CD22, CD79A, CD79B, CXCR5, IGHM, IGHD, BANK1, PAX5, TCL1A",
+        "doi": "none"
+    }
+  },
+  "aliases": [],
+  "short_name": "B cell follicle cells"
+},
   "T cells": {
     "genes": [
       "CD3D",
@@ -85,14 +109,21 @@
       "MYC",
       "CCR6"
     ],
-    "genes_secondary": [],
+    "genes_secondary": [
+      "IL2RG",
+      "BID",
+      "ICAM1",
+      "CD72",
+      "CD86",
+      "CD40"
+    ],
     "references": {"Victoria et al. 2012": {
-        "genes_added": "BCL2A1, EGR3, IL4I1, EGR2, CD83, HIVEP3, IRF4, MYC, CCR6",
+        "genes_added": "BCL2A1, EGR3, IL4I1, EGR2, CD83, HIVEP3, IRF4, MYC, CCR6, IL2RG, BID, ICAM1, CD72, CD86, CD40",
         "doi": "10.1182/blood-2012-03-415380"
       }
     },
     "notes": [
-      "genes with > 3 FC for human and mouse"
+      "primary genes with > 3 FC for human and mouse"
     ],
     "aliases": ["GC LZ"],
     "short_name": "GC LZ"
@@ -221,7 +252,7 @@
     "notes": [
       "no particular reason as yet to prefer primary over secondary list"
     ],
-    "aliases": ["FRC", "FRC"],
+    "aliases": ["FRC"],
     "short_name": "FRC"
   },
   "Follicular dendritic cells": {
@@ -263,7 +294,7 @@
     "notes": [
       "human/mouse differences dicussed in Heesters et al. 2021, try to keep most general ones in primary list"
     ],
-    "aliases": ["FDC", "BRC"],
+    "aliases": ["FDC"],
     "short_name": "FDC"
   },
   "Marginal reticular cells": {
@@ -316,5 +347,65 @@
     },
     "aliases": ["VSMC"],
     "short_name": "VSMC"
+  },
+  "Lymphatic endothelial cells": {
+    "genes": [
+      "NTS",
+      "TFF3",
+      "PROX1",
+      "CD9",
+      "ACKR4",
+      "NUDT4"
+    ],
+    "genes_secondary": [],
+    "references": {
+      "Abe et al. 2022": {
+        "genes_added": "NTS, TFF3, PROX1, CD9, ACKR4, NUDT4",
+        "doi": "10.1038/s41556-022-00866-3"
+      }
+    },
+    "aliases": ["LEC"],
+    "short_name": "LEC"
+  },
+  "Blood endothelial cells": {
+    "genes": [
+      "ACKR1",
+      "PLVAP",
+      "AQP1",
+      "CD74",
+      "VWF",
+      "RGCC",
+      "PECAM1"
+    ],
+    "genes_secondary": [],
+    "references": {
+      "Abe et al. 2022": {
+        "genes_added": "ACKR1, PLVAP, AQP1, CD74, VWF, RGCC, PECAM1",
+        "doi": "10.1038/s41556-022-00866-3"
+      }
+    },
+    "aliases": ["BEC"],
+    "short_name": "BEC"
+  },
+  "Non-endothelial stromal cells": {
+    "genes": [
+      "DCN",
+      "CXCL14",
+      "CCL19",
+      "COL1A2",
+      "TAGLN",
+      "ACTA2",
+      "FBLN1",
+      "COL3A1"
+    ],
+    "genes_secondary": [],
+    "references": {
+      "Abe et al. 2022": {
+        "genes_added": "DCN, CXCL14, CCL19, COL1A2, TAGLN, ACTA2, FBLN1, COL3A1",
+        "doi": "10.1038/s41556-022-00866-3"
+      }
+    },
+    "aliases": ["Non-endothelial SC", "NESC"],
+    "short_name": "NESC"
   }
 }

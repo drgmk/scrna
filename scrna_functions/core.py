@@ -384,3 +384,17 @@ def load_cell_cycle_genes(organism, gene_list=None):
     except Exception as e:
         print(f"Error reading cell cycle genes file: {e}")
         return {'s_genes': [], 'g2m_genes': []}
+
+def get_vmax(rna, markers, percentile=95, min_vmax=0.1):
+    """Get vmax values for a list of marker genes.
+    
+    Parameters
+    ----------
+    rna : AnnData
+        The RNA data.
+    markers : list
+        List of marker genes.
+    """
+    vmax = [np.percentile(rna[:, rna.var_names.isin([g])].X.toarray(), percentile, axis=0) for g in markers]
+    vmax = [v if v > min_vmax else min_vmax for v in vmax]
+    return vmax
