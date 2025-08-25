@@ -1,3 +1,5 @@
+import os
+import shutil
 import numpy as np
 import scipy.stats
 import matplotlib.pyplot as plt
@@ -6,8 +8,7 @@ import scipy.sparse
 import seaborn as sns
 import anndata as ad
 import scanpy as sc
-import json
-import os
+from cellphonedb.src.core.methods import cpdb_statistical_analysis_method
 
 
 def trim_outliers(x, y, groups=None, extra_mask=None, pct=100):
@@ -385,6 +386,7 @@ def load_cell_cycle_genes(organism, gene_list=None):
         print(f"Error reading cell cycle genes file: {e}")
         return {'s_genes': [], 'g2m_genes': []}
 
+
 def get_vmax(rna, markers, percentile=95, min_vmax=0.1):
     """Get vmax values for a list of marker genes.
     
@@ -398,3 +400,107 @@ def get_vmax(rna, markers, percentile=95, min_vmax=0.1):
     vmax = [np.percentile(rna[:, rna.var_names.isin([g])].X.toarray(), percentile, axis=0) for g in markers]
     vmax = [v if v > min_vmax else min_vmax for v in vmax]
     return vmax
+
+
+def cellphonedb_prepare(rna, annotation, outdir, layer=None,
+                        viz_dir=os.path.expanduser('~/Documents/scRNA/cellphonedbviz'),
+                        cpdb_file_path=os.path.expanduser('~/Documents/scRNA/cellphonedb-v5/cellphonedb.zip')
+                        ):
+    """Export data for CellPhoneDB analysis and run it with statistical method.
+
+    Parameters
+    ----------
+    rna : AnnData
+        The RNA data.
+    annotation : str
+        The annotation to use for cell types.
+    outdir : str
+        The output directory. This will be used for the cellphonedb run name, so be descriptive.
+    layer : str, optional
+        The layer key to use for the expression data (default is rna.X).
+    viz_dir : str, optional
+        The directory for visualization outputs (default is ~/Documents/scRNA/cellphonedbviz).
+    cpdb_file_path : str, optional
+        The path to the CellPhoneDB database zip file (default is ~/Documents/scRNA/cellphonedb-v5/cellphonedb.zip).
+    """
+
+    outdir = outdir.rstrip('/') + '/'
+    os.makedirs(outdir, exist_ok=True)
+
+    run_name = os.path.basename(outdir.rstrip('/'))
+    meta_file_path = f'{outdir}metadata.tsv'
+    counts_file_path = f'{outdir}normalised_log_counts.h5ad'
+    microenvs_file_path = f'{outdir}microenvironment.tsv'
+    out_suffix = ''
+
+    meta = pd.DataFrame(rna.obs[[annotation]])
+    meta.rename(columns={
+        annotation: 'cell_type'
+        }, inplace=True)
+    meta.to_csv(meta_file_path, sep='\t', index=True)
+
+    microenv = pd.DataFrame({'cell_type': rna.obs[annotation].unique(), 'microenvironment': 'Env1'})
+    microenv.to_csv(microenvs_file_path, sep='\t', index=False)
+
+    if layer is None:
+        rna_export = ad.AnnData(X=rna.X, obs=meta, var=pd.DataFrame(index=rna.var_names))
+    else:
+        rna_export = ad.AnnData(X=rna.layers[layer], obs=meta, var=pd.DataFrame(index=rna.var_names))
+
+    rna_export.write(counts_file_path, compression='gzip')
+
+    # now run cellphonedb
+    cpdb_results = cpdb_statistical_analysis_method.call(
+        cpdb_file_path = cpdb_file_path,                 # mandatory: CellphoneDB database zip file.
+        meta_file_path = meta_file_path,                 # mandatory: tsv file defining barcodes to cell label.
+        counts_file_path = counts_file_path,             # mandatory: normalized count matrix - a path to the counts file, or an in-memory AnnData object
+        counts_data = 'hgnc_symbol',                     # defines the gene annotation in counts matrix.
+        # active_tfs_file_path = active_tf_path,           # optional: defines cell types and their active TFs.
+        microenvs_file_path = microenvs_file_path,       # optional (default: None): defines cells per microenvironment.
+        score_interactions = True,                       # optional: whether to score interactions or not. 
+        iterations = 1000,                               # denotes the number of shufflings performed in the analysis.
+        threshold = 0.1,                                 # defines the min % of cells expressing a gene for this to be employed in the analysis.
+        threads = 5,                                     # number of threads to use in the analysis.
+        debug_seed = 42,                                 # debug randome seed. To disable >=0.
+        result_precision = 3,                            # Sets the rounding for the mean values in significan_means.
+        pvalue = 0.05,                                   # P-value threshold to employ for significance.
+        subsampling = False,                             # To enable subsampling the data (geometri sketching).
+        subsampling_log = False,                         # (mandatory) enable subsampling log1p for non log-transformed data inputs.
+        subsampling_num_pc = 100,                        # Number of componets to subsample via geometric skectching (dafault: 100).
+        subsampling_num_cells = 1000,                    # Number of cells to subsample (integer) (default: 1/3 of the dataset).
+        separator = '|',                                 # Sets the string to employ to separate cells in the results dataframes "cellA|CellB".
+        debug = False,                                   # Saves all intermediate tables employed during the analysis in pkl format.
+        output_path = outdir,                            # Path to save results.
+        output_suffix = out_suffix                       # Replaces the timestamp in the output files by a user defined string in the  (default: None).
+    )
+
+    # copy files to cellphonedbviz folder
+    out_files = {
+        'deconvoluted_result': os.path.join(outdir, f'statistical_analysis_deconvoluted_{out_suffix}.txt'),
+        'deconvoluted_percents': os.path.join(outdir, f'statistical_analysis_deconvoluted_percents_{out_suffix}.txt'),
+        'analysis_means': os.path.join(outdir, f'statistical_analysis_means_{out_suffix}.txt'),
+        'pvalues': os.path.join(outdir, f'statistical_analysis_pvalues_{out_suffix}.txt'),
+        'relevant_interactions': os.path.join(outdir, f'statistical_analysis_significant_means_{out_suffix}.txt'),
+        'interaction_scores': os.path.join(outdir, f'statistical_analysis_interaction_scores_{out_suffix}.txt'),
+    }
+    
+    os.makedirs(os.path.join(viz_dir, 'data', run_name), exist_ok=True)
+    for k in out_files.keys():
+        shutil.copy(out_files[k], os.path.join(viz_dir, 'data', run_name, os.path.basename(out_files[k])))
+
+    shutil.copy(microenvs_file_path, os.path.join(viz_dir, 'data', run_name, os.path.basename(microenvs_file_path)))
+    shutil.copy(cpdb_file_path, os.path.join(viz_dir, 'data', run_name, os.path.basename(cpdb_file_path)))
+
+    # add files to yaml file
+    with open(os.path.join(viz_dir, 'data', run_name, 'config.yml'), 'w') as f:
+        f.write(f"separator: '|' \n"
+                f"title: {run_name} \n"
+                f"microenvironments: microenvironment.tsv \n"
+                f"cellphonedb: cellphonedb.zip \n"
+        )
+        for k, v in out_files.items():
+            f.write(f"{k}: {os.path.basename(v)} \n")
+
+    # help message
+    print(f'\nCellPhoneDB analysis complete. Results saved to {viz_dir}/data/{run_name}/')
+    print('\n Now go there and run "docker-compose build"')

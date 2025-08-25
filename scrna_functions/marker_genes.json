@@ -17,30 +17,6 @@
     "aliases": [],
     "short_name": "B cells"
   },
-  "B cell follicle cells": {
-    "genes": [
-      "CD19",
-      "MS4A1",
-      "CD22",
-      "CD79A",
-      "CD79B",
-      "CXCR5",
-      "IGHM",
-      "IGHD",
-      "BANK1",
-      "PAX5",
-      "TCL1A"
-    ],
-  "genes_secondary": [],
-  "references": {
-    "chatGPT": {
-        "genes_added": "CD19, MS4A1, CD22, CD79A, CD79B, CXCR5, IGHM, IGHD, BANK1, PAX5, TCL1A",
-        "doi": "none"
-    }
-  },
-  "aliases": [],
-  "short_name": "B cell follicle cells"
-},
   "T cells": {
     "genes": [
       "CD3D",
