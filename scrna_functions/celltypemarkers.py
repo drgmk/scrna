@@ -231,10 +231,12 @@ class CellTypeMarkers:
     def __contains__(self, key: str) -> bool:
         """Check if cell type exists."""
         return key in self.data
-    
-    def keys(self):
-        """Get all cell type names."""
-        return self.data.keys()
+
+    def keys(self, include_secondary: bool = False):
+        """Get all cell type names, checking if genes/secondary_genes lists are empty."""
+        for k in self.data.keys():
+            if len(self.get_markers(k, include_secondary=include_secondary)) > 0:
+                yield k
     
     def items(self):
         """Iterate over cell type, marker pairs."""
