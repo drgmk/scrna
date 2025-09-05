@@ -11,8 +11,37 @@ import scanpy as sc
 from cellphonedb.src.core.methods import cpdb_statistical_analysis_method
 
 
+def do_qc(rna, organism, extra_genes=[]):
+
+    pct_counts = {'mt': ['MT-'],
+              'ribosomal': ['RPL', 'RPS'],
+              'malat': ['MALAT'],
+    }
+    for g in extra_genes:
+        pct_counts[g] = [g]
+
+    if organism.lower() == 'mouse':
+        for k, v in pct_counts.items():
+            pct_counts[k] = [s.capitalize() for s in v]
+    elif organism.lower() == 'human':
+        for k, v in pct_counts.items():
+            pct_counts[k] = [s.upper() for s in v]
+
+    for k in pct_counts.keys():
+        rna.var[k] = rna.var_names.str.startswith(pct_counts[k][0])
+        if len(pct_counts[k]) > 1:
+            for s in pct_counts[k][1:]:
+                rna.var[k] = np.logical_or(rna.var[k], rna.var_names.str.startswith(s))
+            
+        sc.pp.calculate_qc_metrics(rna, qc_vars=[k], percent_top=None, log1p=False, inplace=True)
+
+    rna.var['nomalat'] = np.invert(rna.var['malat'])
+    sc.pp.calculate_qc_metrics(rna, qc_vars=['nomalat'], percent_top=[1], log1p=False, inplace=True)
+
+
 def trim_outliers(x, y, groups=None, extra_mask=None, pct=100):
     """Function to fit a line in log space, trim outliers, and return boolean mask.
+
     Parameters
     ----------
     x : array-like
@@ -386,6 +415,14 @@ def load_cell_cycle_genes(organism, gene_list=None):
         print(f"Error reading cell cycle genes file: {e}")
         return {'s_genes': [], 'g2m_genes': []}
 
+
+def remove_doublet_clusters(rna):
+    """Remove clusters identified as majority doublets by Scrublet."""
+    tmp = rna.obs.groupby('leiden')['predicted_doublet'].agg(pd.Series.mode).reset_index()
+    i_doublet = tmp.loc[tmp['predicted_doublet'] == True, 'leiden'].iloc[0]
+    print(f'removing cluster {i_doublet} as doublets')
+
+    rna = rna[~rna.obs['leiden'].isin([i_doublet])].copy()
 
 def get_vmax(rna, markers, percentile=95, min_vmax=0.1):
     """Get vmax values for a list of marker genes.
