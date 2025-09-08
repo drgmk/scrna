@@ -71,7 +71,9 @@ def test_load_cell_cycle_genes():
     assert 's_genes' in result and 'g2m_genes' in result
 
 def test_remove_doublet_clusters(pbmc):
-    pass
+    pbmc.obs['predicted_doublet'] = [False] * (pbmc.n_obs - 10) + [True] * 10
+    core.remove_doublet_clusters(pbmc, groupby='sample')
+    # No return, just check no error
 
 def test_get_vmax(pbmc):
     markers = CellTypeMarkers('human')

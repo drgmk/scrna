@@ -570,13 +570,20 @@ def load_cell_cycle_genes(organism, gene_list=None):
         return {'s_genes': [], 'g2m_genes': []}
 
 
-def remove_doublet_clusters(adata):
-    """Remove clusters identified as majority doublets by Scrublet."""
-    tmp = adata.obs.groupby('leiden')['predicted_doublet'].agg(pd.Series.mode).reset_index()
-    i_doublet = tmp.loc[tmp['predicted_doublet'] == True, 'leiden'].iloc[0]
-    print(f'removing cluster {i_doublet} as doublets')
+def remove_doublet_clusters(adata, groupby='leiden'):
+    """Remove groups identified as majority doublets by Scrublet."""
+    tmp = adata.obs.groupby(groupby)['predicted_doublet'].agg(pd.Series.mode).reset_index()
+    
+    if tmp['predicted_doublet'].sum() == 0:
+        print('no doublet clusters found')
+        return
 
-    adata = adata[~adata.obs['leiden'].isin([i_doublet])].copy()
+    remove = []
+    for i in tmp.loc[tmp['predicted_doublet'] == True, groupby]:
+        remove.append(i)
+
+    print(f'doublet clusters removed: {remove}')
+    return adata[~adata.obs[groupby].isin(remove)]
 
 
 def get_vmax(adata, markers, percentile=95, min_vmax=0.1):
