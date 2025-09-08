@@ -1,5 +1,6 @@
 import os
 import shutil
+from pathlib import Path
 import numpy as np
 import scipy.stats
 import matplotlib.pyplot as plt
@@ -11,7 +12,41 @@ import scanpy as sc
 from cellphonedb.src.core.methods import cpdb_statistical_analysis_method
 
 
-def do_qc(rna, organism, extra_genes=[]):
+def get_plot_list(adata=None):
+    """Get list of QC plots that can be made based on available columns in adata.obs.
+
+    Parameters
+    ----------
+    adata : AnnData, optional
+        Annotated data matrix containing RNA expression data. If None, returns all possible plots.
+    """
+
+    plot_list = [['n_genes_by_counts', 'total_counts', 'pct_counts_in_top_1_genes'],
+                 ['pct_counts_ribosomal', 'pct_counts_malat', 'pct_counts_mt']]
+
+    if adata is None:
+        return plot_list
+    
+    tmp = []
+    for p in plot_list:
+        tmp.append([pp for pp in p if pp in adata.obs.columns.tolist()])
+    return tmp
+
+
+def do_qc(adata, organism, extra_genes=[]):
+    """Calculate QC metrics for RNA data.
+    
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data matrix containing RNA expression data.
+    organism : str
+        Target organism to determine gene name case. Options:
+        - 'human': uppercase genes (e.g., 'FOXP3')
+        - 'mouse': title case genes (e.g., 'Foxp3')
+    extra_genes : list, optional
+        List of extra gene prefixes to calculate percent counts for.
+    """
 
     pct_counts = {'mt': ['MT-'],
               'ribosomal': ['RPL', 'RPS'],
@@ -28,15 +63,15 @@ def do_qc(rna, organism, extra_genes=[]):
             pct_counts[k] = [s.upper() for s in v]
 
     for k in pct_counts.keys():
-        rna.var[k] = rna.var_names.str.startswith(pct_counts[k][0])
+        adata.var[k] = adata.var_names.str.startswith(pct_counts[k][0])
         if len(pct_counts[k]) > 1:
             for s in pct_counts[k][1:]:
-                rna.var[k] = np.logical_or(rna.var[k], rna.var_names.str.startswith(s))
+                adata.var[k] = np.logical_or(adata.var[k], adata.var_names.str.startswith(s))
             
-        sc.pp.calculate_qc_metrics(rna, qc_vars=[k], percent_top=None, log1p=False, inplace=True)
+        sc.pp.calculate_qc_metrics(adata, qc_vars=[k], percent_top=None, log1p=False, inplace=True)
 
-    rna.var['nomalat'] = np.invert(rna.var['malat'])
-    sc.pp.calculate_qc_metrics(rna, qc_vars=['nomalat'], percent_top=[1], log1p=False, inplace=True)
+    adata.var['nomalat'] = np.invert(adata.var['malat'])
+    sc.pp.calculate_qc_metrics(adata, qc_vars=['nomalat'], percent_top=[1], log1p=False, inplace=True)
 
 
 def trim_outliers(x, y, groups=None, extra_mask=None, pct=100):
@@ -75,37 +110,42 @@ def trim_outliers(x, y, groups=None, extra_mask=None, pct=100):
     return np.logical_and(mask, extra_mask)
 
 
-def plot_gene_counts(rna, hue=None, mask=None,
+def plot_gene_counts(adata, hue='sample', mask=None, order=None,
                      colour_by='pct_counts_in_top_1_genes',
                      size_by='pct_counts_mt',):
     """Plot gene counts and mitochondrial fraction for each sample.
    
     Parameters
     ----------
-    rna : AnnData
+    adata : AnnData
         Annotated data matrix containing RNA expression data.
     hue : str, optional
-        Column name in `rna.obs` to use for multiple panels.
+        Column name in `adata.obs` to use for multiple panels.
     mask : array-like, optional
         Boolean mask to filter the data before plotting.
         This could come from `trim_outliers`.
     colour_by : str, optional
-        Column name in `rna.obs` to use for coloring the points.
+        Column name in `adata.obs` to use for coloring the points.
     size_by : str, optional
-        Column name in `rna.obs` to use for the size of the points.
+        Column name in `adata.obs` to use for the size of the points.
     """
 
     if mask is None:
-        mask = np.ones(rna.shape[0], dtype=bool)
+        mask = np.ones(adata.shape[0], dtype=bool)
 
-    vmax = np.max(rna[mask].obs[colour_by]) if colour_by in rna.obs.columns else None
+    if order is None:
+        order = adata.obs[hue].unique()
 
-    npanel2 = int(np.ceil(len(rna.obs[hue].unique())/2))
+    vmax = np.max(adata[mask].obs[colour_by]) if colour_by in adata.obs.columns else None
+
+    npanel2 = int(np.ceil(len(order)/2))
     fig, ax = plt.subplots(2, npanel2,
                            sharey=True, sharex=True,
                            figsize=(npanel2*2.5, 6))
-    for i, s in enumerate(rna.obs[hue].unique()):
-        tmp = rna[(rna.obs[hue] == s) & mask, :]
+    ax = ax.reshape(2, npanel2)
+    
+    for i, s in enumerate(order):
+        tmp = adata[(adata.obs[hue] == s) & mask, :]
         a = ax.flatten()[i]
         _ = a.scatter(tmp.obs.total_counts, tmp.obs.n_genes_by_counts,
                     s=tmp.obs[size_by]/4, c=tmp.obs[colour_by],
@@ -126,6 +166,94 @@ def plot_gene_counts(rna, hue=None, mask=None,
         a.grid(True, which='both', linestyle='-', linewidth=0.5, alpha=0.5)
         a.set_axisbelow(True)
     fig.tight_layout()
+    return fig
+
+
+def plot_top_genes(adata, hue='sample', n_top=10, order=None):
+    """Plot the top 10 most highly expressed genes for each sample.
+    
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data matrix containing RNA expression data.
+    hue : str, optional
+        Column name in `adata.obs` to use for multiple panels.
+    order : list, optional
+        List of group names in the order to plot. If None, uses the order in `adata.obs[hue].unique()`.
+    """
+    if order is None:
+        order = adata.obs[hue].unique()
+    npanel2 = int(np.ceil(len(order)/2))
+    fig, ax = plt.subplots(2, npanel2, figsize=(18, 10), sharex=True, sharey=True)
+    ax = ax.reshape(2, npanel2)
+    for i, s in enumerate(order):
+        sc.pl.highest_expr_genes(adata[adata.obs[hue] == s].copy(), n_top=n_top, log=True, ax=ax[i//npanel2, i%npanel2], show=False)
+        ax[i//npanel2, i%npanel2].axvline(x=1, alpha=0.5)
+        ax[i//npanel2, i%npanel2].set_title(s)
+
+    fig.tight_layout()
+    return fig
+
+
+def plot_umaps(adata, hue='sample', order=None):
+    """Plot UMAPs for each sample and for all samples combined.
+    
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data matrix containing RNA expression data.
+    hue : str, optional
+        Column name in `adata.obs` to use for multiple panels.
+    order : list, optional
+        List of group names in the order to plot. If None, uses the order in `adata.obs[hue].unique()`.
+    """
+    if order is None:
+        order = adata.obs[hue].unique()
+    npanel2 = int(np.ceil((len(order)+1)/2))
+    fig, ax = plt.subplots(2, npanel2, figsize=(15,8), sharex=True, sharey=True)
+    for i, s in enumerate(order):
+        a = ax.flatten()[i]
+        sc.pl.umap(adata[adata.obs[hue] == s], ax=a, show=False, size=10)
+        a.set_title(s)
+
+    sc.pl.umap(adata, ax=ax.flatten()[-1], show=False, size=10)
+    ax.flatten()[-1].set_title('all')
+    fig.tight_layout()
+    return fig
+
+
+def plot_cell_counts(adata, x='sample', y='celltype', x_order=None, y_order=None):
+    """Plot heatmap of cell numbers per x (e.g. sample) and y (e.g. cell type).
+    
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data matrix containing RNA expression data.
+    x : str, optional
+        Column name in `adata.obs` to use for x-axis.
+    y : str, optional
+        Column name in `adata.obs` to use for y-axis.
+    x_order : list, optional
+        List of group names in the order to plot for x. If None, uses the order in `adata.obs[x].unique()`.
+    y_order : list, optional
+        List of group names in the order to plot for y. If None, uses the order in `adata.obs[y].unique()`.
+    """
+
+    if x_order is None:
+        x_order = adata.obs[x].unique()
+    if y_order is None:
+        y_order = adata.obs[y].unique()
+
+    ct = pd.crosstab(adata.obs[x], adata.obs[y])
+    ct = ct[y_order].transpose()
+    ct = ct[x_order]
+    ct['total'] = ct.sum(axis=1)
+    ct.loc['total'] = ct.sum(axis=0)
+
+    fig, ax = plt.subplots(figsize=(12, 8))
+    sns.heatmap(ct, annot=True, cmap='viridis', cbar_kws={'label': 'Number of cells'}, ax=ax, fmt='g', norm='log')
+    fig.tight_layout()
+    return fig
 
 
 def _seurat_clr(x, length=None):
@@ -188,12 +316,12 @@ def clr_normalize_each_cell(adata, inplace=False):
 
 
 
-def normalisation_kernel_density_plot(rna, n_sample=500, ax=None, hue=None):
+def normalisation_kernel_density_plot(adata, n_sample=500, ax=None, hue=None):
     """Plot subset of data with kernel density estimate.
     
     Parameters
     ----------
-    rna : AnnData
+    adata : AnnData
         Annotated data matrix containing RNA expression data.
     n_sample : int, optional
         Number of random samples to plot. Default is 500.
@@ -208,26 +336,29 @@ def normalisation_kernel_density_plot(rna, n_sample=500, ax=None, hue=None):
         fig = ax.figure
 
     # create colours for each sample
-    if hue is not None and hue in rna.obs.columns:
-        hue = rna.obs[hue].unique()
-        colours = sns.color_palette("husl", len(hue))
-        hue_dict = dict(zip(hue, colours))
-        hue_offset = dict(zip(rna.obs['sample'].unique(), np.arange(len(rna.obs['sample'].unique()))))
+    if hue is not None and hue in adata.obs.columns:
+        hue_ = adata.obs[hue].unique()
+        colours = sns.color_palette("husl", len(hue_))
+        hue_dict = dict(zip(hue_, colours))
+        hue_offset = dict(zip(adata.obs[hue].unique(), np.arange(len(adata.obs[hue].unique()))))
     else:
         hue_dict = None
 
-    for i in np.random.randint(low=0, high=rna.shape[0], size=n_sample):
-        if scipy.sparse.issparse(rna.X):
-            tmp =rna.X[i,:].toarray()[0]
+    # print(hue_dict, hue_offset)
+
+    for i in np.random.randint(low=0, high=adata.shape[0], size=n_sample):
+        if scipy.sparse.issparse(adata.X):
+            tmp =adata.X[i,:].toarray()[0]
         else:
-            tmp = rna.X[i,:]
+            tmp = adata.X[i,:]
         kern = scipy.stats.gaussian_kde(tmp)
-        ax.plot(x, kern(x) + 0.2*hue_offset[rna.obs['sample'].iloc[i]] if hue_dict else 0, 
-                linewidth=1, color=hue_dict[rna.obs['sample'].iloc[i]] if hue_dict else 'black')
-        
-    for k in hue_offset.keys():
-        ax.text(2.4, 0.2*hue_offset[k]+0.05, k, color=hue_dict[k] if hue_dict else 'black')
-    ax.set_ylim(0, 1+0.2*len(rna.obs['sample'].unique()))
+        ax.plot(x, kern(x) + (0.2*hue_offset[adata.obs[hue].iloc[i]] if hue_dict else 0), 
+                linewidth=1, color=hue_dict[adata.obs[hue].iloc[i]] if hue_dict else 'black')
+
+    if hue_dict is not None:
+        for k in hue_offset.keys():
+            ax.text(2.4, 0.2*hue_offset[k]+0.05, k, color=hue_dict[k] if hue_dict else 'black')
+        ax.set_ylim(0, 1+0.2*len(adata.obs[hue].unique()))
     ax.set_xlabel('normalised expression')
     if ax is None:
         fig.tight_layout()
@@ -236,7 +367,7 @@ def normalisation_kernel_density_plot(rna, n_sample=500, ax=None, hue=None):
         return ax
 
 
-def normalisation_check(rna, percentile=95, ax=None, hue=None, n_sample=None):
+def normalisation_check(adata, percentile=95, ax=None, hue=None, n_sample=None):
     """Check normalisation of RNA data.
     
     This function checks the normalisation of RNA data by plotting the mean and
@@ -246,17 +377,17 @@ def normalisation_check(rna, percentile=95, ax=None, hue=None, n_sample=None):
     
     Parameters
     ----------
-    rna : AnnData
+    adata : AnnData
         Annotated data matrix containing RNA expression data.
     percentile : float, optional
         Percentile at which to plot each gene.
     ax : matplotlib.axes.Axes, optional
         The axis to plot on. If None, creates a new figure.
     n_sample : int, optional
-        If provided, plot only a random subset of this many rows from rna.
+        If provided, plot only a random subset of this many rows from adata.
     """
 
-    n_cells = rna.shape[0]
+    n_cells = adata.shape[0]
     if n_sample is not None and n_sample < n_cells:
         idx = np.random.choice(n_cells, n_sample, replace=False)
     else:
@@ -265,10 +396,10 @@ def normalisation_check(rna, percentile=95, ax=None, hue=None, n_sample=None):
     pc = np.zeros(len(idx))
     mn = pc.copy()
     for i, j in enumerate(idx):
-        if scipy.sparse.issparse(rna.X):
-            row = rna.X[j,:].toarray()
+        if scipy.sparse.issparse(adata.X):
+            row = adata.X[j,:].toarray()
         else:
-            row = rna.X[j,:]
+            row = adata.X[j,:]
         ok = row > 0
         mn[i] = np.sum(row[ok])/len(row)
         pc[i] = np.percentile(row, percentile)
@@ -278,8 +409,8 @@ def normalisation_check(rna, percentile=95, ax=None, hue=None, n_sample=None):
     else:
         fig = ax.figure
 
-    if hue is not None and hue in rna.obs.columns:
-        hue = rna.obs['sample'].iloc[idx]
+    if hue is not None and hue in adata.obs.columns:
+        hue = adata.obs['sample'].iloc[idx]
     sns.scatterplot(x=mn, y=pc, hue=hue, ax=ax)
     ax.set_xlabel('mean normalised expression')
     ax.set_ylabel(f'{percentile}th percentile normalised expression')
@@ -290,30 +421,36 @@ def normalisation_check(rna, percentile=95, ax=None, hue=None, n_sample=None):
         return ax
     
 
-def normalisation_plots(rna, n_sample=1000, hue=None):
+def normalisation_plots(adata, n_sample=1000, hue=None):
     """Plots to check normalisation of RNA data.
 
     Parameters
     ----------
-    rna : AnnData
+    adata : AnnData
         Annotated data matrix containing RNA expression data.
+    n_sample : int, optional
+        Number of random samples to plot in the kernel density plot and normalisation check. Default is 1000.
+    hue : str, optional
+        Column name in `adata.obs` to use for coloring the kernel density plot and histogram.
     """
     fig, ax = plt.subplots(1, 3, figsize=(15, 5))
-    _ = normalisation_kernel_density_plot(rna, ax=ax[0], hue=hue, n_sample=n_sample)
-    _ = normalisation_check(rna, ax=ax[1], n_sample=n_sample, hue=hue)
+    _ = normalisation_kernel_density_plot(adata, ax=ax[0], hue=hue, n_sample=n_sample)
+    _ = normalisation_check(adata, ax=ax[1], n_sample=n_sample, hue=hue)
 
-    if hue is not None and hue in rna.obs.columns:
-        for i, g in enumerate(rna.obs[hue].unique()):
-            ax[2].hist(rna[rna.obs[hue] == g].X.sum(1), bins=100, label=g, alpha=0.5)
+    if hue is not None and hue in adata.obs.columns:
+        for i, g in enumerate(adata.obs[hue].unique()):
+            ax[2].hist(adata[adata.obs[hue] == g].X.sum(1), bins=100, label=g, alpha=0.5)
     else:
-        ax[2].hist(rna.X.sum(1), bins=100)
+        ax[2].hist(adata.X.sum(1), bins=100)
     ax[2].set_xlabel('normalised counts')
     fig.tight_layout()
     return fig
 
 
-def pca_heatmap(adata, component, layer=None):
+def pca_heatmap(adata, component, n_genes=30, layer=None):
     """Plot heatmap of PCA scores for the top and bottom 20 variable genes.
+
+    Seurat DimHeatmap equivalent: top N genes by absolute loading, cells ordered by PC score.
 
     Parameters
     ----------
@@ -324,23 +461,40 @@ def pca_heatmap(adata, component, layer=None):
     layer : str, optional
         The layer of the AnnData object to use for the heatmap. If None, uses the main data layer.
     """
-    attr = 'varm'
-    keys = 'PCs'
-    scores = getattr(adata, attr)[keys][:, component]
-    dd = pd.DataFrame(scores, index=adata.var_names)
-    var_names_pos = dd.sort_values(0, ascending=False).index[:20]
 
-    var_names_neg = dd.sort_values(0, ascending=True).index[:20]
+    # Get PC loadings for the selected component
+    pc_loadings = adata.varm['PCs'][:, component]
+    gene_names = adata.var_names
+    # Top N genes by absolute loading
+    top_idx = np.argsort(np.abs(pc_loadings))[::-1][:n_genes]
+    top_genes = gene_names[top_idx]
 
-    pd2 = pd.DataFrame(adata.obsm['X_pca'][:, component], index=adata.obs.index)
+    # Get cell scores for the component and order cells
+    cell_scores = adata.obsm['X_pca'][:, component]
+    cell_order = np.argsort(cell_scores)[::-1]  # descending order
+    ordered_cells = adata.obs_names[cell_order]
 
-    bottom_cells = pd2.sort_values(0).index[:300].tolist()
-    top_cells = pd2.sort_values(0, ascending=False).index[:300].tolist()
+    # Get expression matrix for top genes and ordered cells
+    if layer is not None:
+        expr = adata[ordered_cells, top_genes].layers[layer]
+    else:
+        expr = adata[ordered_cells, top_genes].X
+    if hasattr(expr, 'toarray'):
+        expr = expr.toarray()
 
-    sc.pl.heatmap(adata[top_cells+bottom_cells], list(var_names_pos) + list(var_names_neg), 'il21',
-                  show_gene_labels=True, figsize=(4,4),
-                  swap_axes=True, cmap='inferno',
-                  use_raw=False, layer=layer, vmin=-1, vmax=3)
+    # Optionally scale expression (z-score per gene)
+    expr = (expr - expr.mean(axis=0)) / (expr.std(axis=0) + 1e-8)
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.heatmap(expr.T, cmap='inferno', center=0, cbar_kws={'label': 'Scaled Expression'}, ax=ax)
+    ax.set_yticks(np.arange(len(top_genes)) + 0.5)
+    ax.set_yticklabels(top_genes, fontsize=8)
+    ax.set_xticks([])
+    ax.set_xlabel('Cells (ordered by PC score)')
+    ax.set_ylabel('Top genes (by PC loading)')
+    ax.set_title(f'DimHeatmap: PC{component+1}')
+    fig.tight_layout()
+    return fig
 
 
 def load_cell_cycle_genes(organism, gene_list=None):
@@ -416,30 +570,31 @@ def load_cell_cycle_genes(organism, gene_list=None):
         return {'s_genes': [], 'g2m_genes': []}
 
 
-def remove_doublet_clusters(rna):
+def remove_doublet_clusters(adata):
     """Remove clusters identified as majority doublets by Scrublet."""
-    tmp = rna.obs.groupby('leiden')['predicted_doublet'].agg(pd.Series.mode).reset_index()
+    tmp = adata.obs.groupby('leiden')['predicted_doublet'].agg(pd.Series.mode).reset_index()
     i_doublet = tmp.loc[tmp['predicted_doublet'] == True, 'leiden'].iloc[0]
     print(f'removing cluster {i_doublet} as doublets')
 
-    rna = rna[~rna.obs['leiden'].isin([i_doublet])].copy()
+    adata = adata[~adata.obs['leiden'].isin([i_doublet])].copy()
 
-def get_vmax(rna, markers, percentile=95, min_vmax=0.1):
+
+def get_vmax(adata, markers, percentile=95, min_vmax=0.1):
     """Get vmax values for a list of marker genes.
     
     Parameters
     ----------
-    rna : AnnData
+    adata : AnnData
         The RNA data.
     markers : list
         List of marker genes.
     """
-    vmax = [np.percentile(rna[:, rna.var_names.isin([g])].X.toarray(), percentile, axis=0) for g in markers]
+    vmax = [np.percentile(adata[:, adata.var_names.isin([g])].X.toarray(), percentile, axis=0) for g in markers]
     vmax = [v if v > min_vmax else min_vmax for v in vmax]
     return vmax
 
 
-def cellphonedb_prepare(rna, annotation, outdir, layer=None,
+def cellphonedb_prepare(adata, annotation, outdir, layer=None,
                         viz_dir=os.path.expanduser('~/Documents/scRNA/cellphonedbviz'),
                         cpdb_file_path=os.path.expanduser('~/Documents/scRNA/cellphonedb-v5/cellphonedb.zip')
                         ):
@@ -447,97 +602,92 @@ def cellphonedb_prepare(rna, annotation, outdir, layer=None,
 
     Parameters
     ----------
-    rna : AnnData
+    adata : AnnData
         The RNA data.
     annotation : str
         The annotation to use for cell types.
     outdir : str
         The output directory. This will be used for the cellphonedb run name, so be descriptive.
     layer : str, optional
-        The layer key to use for the expression data (default is rna.X).
+        The layer key to use for the expression data (default is adata.X).
     viz_dir : str, optional
         The directory for visualization outputs (default is ~/Documents/scRNA/cellphonedbviz).
     cpdb_file_path : str, optional
         The path to the CellPhoneDB database zip file (default is ~/Documents/scRNA/cellphonedb-v5/cellphonedb.zip).
     """
+    outdir = Path(outdir).resolve()
+    outdir.mkdir(parents=True, exist_ok=True)
 
-    outdir = outdir.rstrip('/') + '/'
-    os.makedirs(outdir, exist_ok=True)
-
-    run_name = os.path.basename(outdir.rstrip('/'))
-    meta_file_path = f'{outdir}metadata.tsv'
-    counts_file_path = f'{outdir}normalised_log_counts.h5ad'
-    microenvs_file_path = f'{outdir}microenvironment.tsv'
+    run_name = outdir.name
+    meta_file_path = outdir / 'metadata.tsv'
+    counts_file_path = outdir / 'normalised_log_counts.h5ad'
+    microenvs_file_path = outdir / 'microenvironment.tsv'
     out_suffix = ''
 
-    meta = pd.DataFrame(rna.obs[[annotation]])
-    meta.rename(columns={
-        annotation: 'cell_type'
-        }, inplace=True)
+    meta = pd.DataFrame(adata.obs[[annotation]])
+    meta.rename(columns={annotation: 'cell_type'}, inplace=True)
     meta.to_csv(meta_file_path, sep='\t', index=True)
 
-    microenv = pd.DataFrame({'cell_type': rna.obs[annotation].unique(), 'microenvironment': 'Env1'})
+    microenv = pd.DataFrame({'cell_type': adata.obs[annotation].unique(), 'microenvironment': 'Env1'})
     microenv.to_csv(microenvs_file_path, sep='\t', index=False)
 
     if layer is None:
-        rna_export = ad.AnnData(X=rna.X, obs=meta, var=pd.DataFrame(index=rna.var_names))
+        adata_export = ad.AnnData(X=adata.X, obs=meta, var=pd.DataFrame(index=adata.var_names))
     else:
-        rna_export = ad.AnnData(X=rna.layers[layer], obs=meta, var=pd.DataFrame(index=rna.var_names))
+        adata_export = ad.AnnData(X=adata.layers[layer], obs=meta, var=pd.DataFrame(index=adata.var_names))
 
-    rna_export.write(counts_file_path, compression='gzip')
+    adata_export.write(counts_file_path, compression='gzip')
 
-    # now run cellphonedb
     cpdb_results = cpdb_statistical_analysis_method.call(
-        cpdb_file_path = cpdb_file_path,                 # mandatory: CellphoneDB database zip file.
-        meta_file_path = meta_file_path,                 # mandatory: tsv file defining barcodes to cell label.
-        counts_file_path = counts_file_path,             # mandatory: normalized count matrix - a path to the counts file, or an in-memory AnnData object
-        counts_data = 'hgnc_symbol',                     # defines the gene annotation in counts matrix.
-        # active_tfs_file_path = active_tf_path,           # optional: defines cell types and their active TFs.
-        microenvs_file_path = microenvs_file_path,       # optional (default: None): defines cells per microenvironment.
-        score_interactions = True,                       # optional: whether to score interactions or not. 
-        iterations = 1000,                               # denotes the number of shufflings performed in the analysis.
-        threshold = 0.1,                                 # defines the min % of cells expressing a gene for this to be employed in the analysis.
-        threads = 5,                                     # number of threads to use in the analysis.
-        debug_seed = 42,                                 # debug randome seed. To disable >=0.
-        result_precision = 3,                            # Sets the rounding for the mean values in significan_means.
-        pvalue = 0.05,                                   # P-value threshold to employ for significance.
-        subsampling = False,                             # To enable subsampling the data (geometri sketching).
-        subsampling_log = False,                         # (mandatory) enable subsampling log1p for non log-transformed data inputs.
-        subsampling_num_pc = 100,                        # Number of componets to subsample via geometric skectching (dafault: 100).
-        subsampling_num_cells = 1000,                    # Number of cells to subsample (integer) (default: 1/3 of the dataset).
-        separator = '|',                                 # Sets the string to employ to separate cells in the results dataframes "cellA|CellB".
-        debug = False,                                   # Saves all intermediate tables employed during the analysis in pkl format.
-        output_path = outdir,                            # Path to save results.
-        output_suffix = out_suffix                       # Replaces the timestamp in the output files by a user defined string in the  (default: None).
+        cpdb_file_path = str(cpdb_file_path),
+        meta_file_path = str(meta_file_path),
+        counts_file_path = str(counts_file_path),
+        counts_data = 'hgnc_symbol',
+        microenvs_file_path = str(microenvs_file_path),
+        score_interactions = True,
+        iterations = 1000,
+        threshold = 0.1,
+        threads = 5,
+        debug_seed = 42,
+        result_precision = 3,
+        pvalue = 0.05,
+        subsampling = False,
+        subsampling_log = False,
+        subsampling_num_pc = 100,
+        subsampling_num_cells = 1000,
+        separator = '|',
+        debug = False,
+        output_path = str(outdir),
+        output_suffix = out_suffix
     )
 
-    # copy files to cellphonedbviz folder
     out_files = {
-        'deconvoluted_result': os.path.join(outdir, f'statistical_analysis_deconvoluted_{out_suffix}.txt'),
-        'deconvoluted_percents': os.path.join(outdir, f'statistical_analysis_deconvoluted_percents_{out_suffix}.txt'),
-        'analysis_means': os.path.join(outdir, f'statistical_analysis_means_{out_suffix}.txt'),
-        'pvalues': os.path.join(outdir, f'statistical_analysis_pvalues_{out_suffix}.txt'),
-        'relevant_interactions': os.path.join(outdir, f'statistical_analysis_significant_means_{out_suffix}.txt'),
-        'interaction_scores': os.path.join(outdir, f'statistical_analysis_interaction_scores_{out_suffix}.txt'),
+        'deconvoluted_result': outdir / f'statistical_analysis_deconvoluted_{out_suffix}.txt',
+        'deconvoluted_percents': outdir / f'statistical_analysis_deconvoluted_percents_{out_suffix}.txt',
+        'analysis_means': outdir / f'statistical_analysis_means_{out_suffix}.txt',
+        'pvalues': outdir / f'statistical_analysis_pvalues_{out_suffix}.txt',
+        'relevant_interactions': outdir / f'statistical_analysis_significant_means_{out_suffix}.txt',
+        'interaction_scores': outdir / f'statistical_analysis_interaction_scores_{out_suffix}.txt',
     }
-    
-    os.makedirs(os.path.join(viz_dir, 'data', run_name), exist_ok=True)
-    for k in out_files.keys():
-        shutil.copy(out_files[k], os.path.join(viz_dir, 'data', run_name, os.path.basename(out_files[k])))
 
-    shutil.copy(microenvs_file_path, os.path.join(viz_dir, 'data', run_name, os.path.basename(microenvs_file_path)))
-    shutil.copy(cpdb_file_path, os.path.join(viz_dir, 'data', run_name, os.path.basename(cpdb_file_path)))
+    viz_dir = Path(viz_dir).resolve()
+    viz_data_dir = viz_dir / 'data' / run_name
+    viz_data_dir.mkdir(parents=True, exist_ok=True)
 
-    # add files to yaml file
-    with open(os.path.join(viz_dir, 'data', run_name, 'config.yml'), 'w') as f:
+    for k, v in out_files.items():
+        shutil.copy(v, viz_data_dir / v.name)
+
+    shutil.copy(microenvs_file_path, viz_data_dir / microenvs_file_path.name)
+    shutil.copy(cpdb_file_path, viz_data_dir / Path(cpdb_file_path).name)
+
+    with open(viz_data_dir / 'config.yml', 'w') as f:
         f.write(f"separator: '|' \n"
                 f"title: {run_name} \n"
                 f"microenvironments: microenvironment.tsv \n"
                 f"cellphonedb: cellphonedb.zip \n"
         )
         for k, v in out_files.items():
-            f.write(f"{k}: {os.path.basename(v)} \n")
+            f.write(f"{k}: {v.name} \n")
 
-    # help message
-    print(f'\nCellPhoneDB analysis complete. Results saved to {viz_dir}/data/{run_name}/')
+    print(f'\nCellPhoneDB analysis complete. Results saved to {viz_data_dir}/')
     print('\n Now go there and run "docker-compose build"')
