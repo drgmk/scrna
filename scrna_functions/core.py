@@ -10,6 +10,7 @@ import seaborn as sns
 import anndata as ad
 import scanpy as sc
 from cellphonedb.src.core.methods import cpdb_statistical_analysis_method
+import celltypist
 
 
 def get_plot_list(adata=None):
