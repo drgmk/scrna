@@ -601,6 +601,62 @@ def get_vmax(adata, markers, percentile=95, min_vmax=0.1):
     return vmax
 
 
+def rank_genes_groups_to_df(adata, key='rank_genes_groups'):
+    """Convert the results from pairwise sc.tl.rank_genes_groups to a pandas DataFrame.
+
+    Parameters
+    ----------
+    adata : AnnData
+        The RNA data with results from sc.tl.rank_genes_groups.
+    key : str, optional
+        The key in adata.uns where the rank_genes_groups results are stored (default is 'rank_genes_groups').
+    """
+    result = adata.uns[key]
+    groups = result['names'].dtype.names
+    dfs = []
+    for g in groups:
+        df_dict = {}
+        df_dict['group'] = [g] * len(result['names'][g])
+        df_dict['reference'] = result['params']['reference']
+        for k in result.keys():
+            if k != 'params':
+                df_dict[k] = result[k][g]
+        df = pd.DataFrame(df_dict)
+        dfs.append(df)
+
+    return pd.concat(dfs, ignore_index=True)
+
+
+def celltypist_annotate(adata, recluster=False):
+    """Quick annotation of cell types using CellTypist.
+
+    Parameters
+    ----------
+    adata : AnnData
+        The RNA data.
+    recluster : bool, optional
+        Whether to recluster the data before annotation (default is False).
+    """
+    if recluster:
+        sc.pp.highly_variable_genes(adata)
+        sc.tl.pca(adata)
+        sc.pp.neighbors(adata, n_neighbors=20)
+        sc.tl.umap(adata)
+        sc.tl.leiden(adata, resolution=0.8)
+
+    rna_tmp = adata.copy()
+    rna_tmp.X = rna_tmp.layers['norm_1e4']
+
+    predictions_subtypes = celltypist.annotate(rna_tmp, model = 'Immune_All_Low.pkl', majority_voting = True)
+    rna_tmp = predictions_subtypes.to_adata(prefix='subtypes_')
+    predictions_maintypes = celltypist.annotate(rna_tmp, model = 'Immune_All_High.pkl', majority_voting = True)
+    rna_tmp = predictions_maintypes.to_adata(prefix='maintypes_')
+
+    for col in rna_tmp.obs.columns:
+        if col.startswith('subtypes_') or col.startswith('maintypes_'):
+            adata.obs[col] = rna_tmp.obs[col].copy()
+
+
 def cellphonedb_prepare(adata, annotation, outdir, layer=None,
                         viz_dir=os.path.expanduser('~/Documents/scRNA/cellphonedbviz'),
                         cpdb_file_path=os.path.expanduser('~/Documents/scRNA/cellphonedb-v5/cellphonedb.zip')
