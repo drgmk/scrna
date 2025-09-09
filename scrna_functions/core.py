@@ -9,6 +9,9 @@ import scipy.sparse
 import seaborn as sns
 import anndata as ad
 import scanpy as sc
+import decoupler as dc
+from pydeseq2.dds import DeseqDataSet, DefaultInference
+from pydeseq2.ds import DeseqStats
 from cellphonedb.src.core.methods import cpdb_statistical_analysis_method
 import celltypist
 
@@ -627,6 +630,130 @@ def rank_genes_groups_to_df(adata, key='rank_genes_groups'):
         dfs.append(df)
 
     return pd.concat(dfs, ignore_index=False)
+
+
+def get_pseudobulk(adata, min_cells=10, sample='sample', group='group'):
+    """Create pseudobulk data from single-cell RNA data and perform PCA.
+    
+    Parameters
+    ----------
+    adata : AnnData
+        The RNA data.
+    min_cells : int, optional
+        Minimum number of cells per sample to retain (default is 10).
+    sample : str, optional
+        Column name in `adata.obs` to use as sample identifier (default is 'sample').
+    group : str, optional
+        Column name in `adata.obs` to use as grouping variable (default is 'group').
+    """
+    pdata = dc.pp.pseudobulk(
+        adata=adata,
+        sample_col=sample,
+        groups_col=group,
+        layer='counts',
+        mode="sum",
+    )
+
+    dc.pl.filter_samples(
+        adata=pdata,
+        groupby=[sample],
+        min_cells=min_cells,
+        min_counts=1000,
+        figsize=(5, 8),
+    )
+
+    dc.pp.filter_samples(pdata, min_cells=min_cells, min_counts=1000)
+
+    dc.pl.obsbar(adata=pdata, y=group, hue=sample, figsize=(6, 3))
+
+    # Store raw counts in layers
+    pdata.layers["counts"] = pdata.X.copy()
+
+    # Normalize, scale and compute pca
+    sc.pp.normalize_total(pdata, target_sum=1e4)
+    sc.pp.log1p(pdata)
+    sc.pp.scale(pdata, max_value=10)
+    sc.tl.pca(pdata)
+
+    # Return raw counts to X
+    dc.pp.swap_layer(adata=pdata, key="counts", inplace=True)
+
+    # print(pdata.obs)
+    dc.tl.rankby_obsm(pdata, key="X_pca")
+
+    sc.pl.pca_variance_ratio(pdata)
+    dc.pl.obsm(adata=pdata, return_fig=True, nvar=5, dendrogram=False,
+               titles=["PC scores", "Adjusted p-values"], figsize=(10, 5))
+
+    sc.pl.pca(
+        pdata,
+        color=[sample, group],
+        ncols=1,
+        size=300,
+        frameon=True,
+    )
+
+    dc.pl.filter_by_expr(
+        adata=pdata,
+        group=group,
+        min_count=10,
+        min_total_count=15,
+        large_n=10,
+        min_prop=0.7,
+    )
+    dc.pl.filter_by_prop(
+        adata=pdata,
+        min_prop=0.1,
+        min_smpls=2,
+    )
+
+    dc.pp.filter_by_expr(
+        adata=pdata,
+        group=group,
+        min_count=10,
+        min_total_count=15,
+        large_n=10,
+        min_prop=0.7,
+    )
+    dc.pp.filter_by_prop(
+        adata=pdata,
+        min_prop=0.1,
+        min_smpls=2,
+    )
+    return pdata
+
+
+def do_deg(pdata, design, contrast):
+    """Perform differential expression analysis using DESeq2 via decoupler.
+
+    Parameters
+    ----------
+    pdata : AnnData
+        The pseudobulk RNA data.
+    design : str
+        The design formula for the DESeq2 analysis.
+    contrast : str
+        The contrast to use for the differential expression analysis.
+    """
+    inference = DefaultInference(n_cpus=8)
+    dds = DeseqDataSet(
+        adata=pdata,
+        design=design,
+        refit_cooks=True,
+        inference=inference,
+    )
+
+    # Compute LFCs
+    dds.deseq2()
+
+    # Extract contrast between conditions
+    stat_res = DeseqStats(dds, contrast=contrast, inference=inference)
+
+    # Compute Wald test
+    stat_res.summary()
+
+    # Extract results
+    return stat_res.results_df
 
 
 def celltypist_annotate(adata, recluster=False):

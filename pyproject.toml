@@ -35,6 +35,8 @@ dependencies = [
     "scanpy",
     "cellphonedb",
     "celltypist",
+    "decoupler",
+    "pydeseq2"
 ]
 
 [project.optional-dependencies]
