@@ -623,9 +623,10 @@ def rank_genes_groups_to_df(adata, key='rank_genes_groups'):
             if k != 'params':
                 df_dict[k] = result[k][g]
         df = pd.DataFrame(df_dict)
+        df.set_index('names', inplace=True)
         dfs.append(df)
 
-    return pd.concat(dfs, ignore_index=True)
+    return pd.concat(dfs, ignore_index=False)
 
 
 def celltypist_annotate(adata, recluster=False):
