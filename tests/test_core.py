@@ -15,7 +15,7 @@ def test_get_plot_list(pbmc):
     assert isinstance(result, list)
 
 def test_do_qc(pbmc):
-    core.do_qc(pbmc, organism='human')
+    core.do_qc(pbmc)
     # No return, just check no error
 
 def test_trim_outliers(pbmc):
@@ -25,7 +25,7 @@ def test_trim_outliers(pbmc):
     assert len(mask) == len(x)
 
 def test_plot_gene_counts(pbmc):
-    core.do_qc(pbmc, organism='human')
+    core.do_qc(pbmc)
     fig = core.plot_gene_counts(pbmc)
     assert fig is not None
 
