@@ -94,7 +94,7 @@ def trim_outliers(x, y, sample_list=None, extra_mask=None, pct=100):
         extra_mask = np.ones(x_.shape[0], dtype=bool)
 
     if sample_list is not None:
-        for g in sample_list:
+        for g in np.unique(sample_list):
             mask_g = sample_list == g
             mask[mask_g] = trim_outliers(x_[mask_g], y_[mask_g], extra_mask=extra_mask[mask_g], pct=pct)
         return mask
