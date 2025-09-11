@@ -37,17 +37,13 @@ def get_plot_list(adata=None):
     return tmp
 
 
-def do_qc(adata, organism, extra_genes=[]):
+def do_qc(adata, extra_genes=[]):
     """Calculate QC metrics for RNA data.
     
     Parameters
     ----------
     adata : AnnData
         Annotated data matrix containing RNA expression data.
-    organism : str
-        Target organism to determine gene name case. Options:
-        - 'human': uppercase genes (e.g., 'FOXP3')
-        - 'mouse': title case genes (e.g., 'Foxp3')
     extra_genes : list, optional
         List of extra gene prefixes to calculate percent counts for.
     """
@@ -59,26 +55,23 @@ def do_qc(adata, organism, extra_genes=[]):
     for g in extra_genes:
         pct_counts[g] = [g]
 
-    if organism.lower() == 'mouse':
-        for k, v in pct_counts.items():
-            pct_counts[k] = [s.capitalize() for s in v]
-    elif organism.lower() == 'human':
-        for k, v in pct_counts.items():
-            pct_counts[k] = [s.upper() for s in v]
+    # convert everthing to lower case for matching
+    for k, v in pct_counts.items():
+        pct_counts[k] = [s.lower() for s in v]
 
     for k in pct_counts.keys():
-        adata.var[k] = adata.var_names.str.startswith(pct_counts[k][0])
+        adata.var[k] = adata.var_names.str.lower().str.startswith(pct_counts[k][0])
         if len(pct_counts[k]) > 1:
             for s in pct_counts[k][1:]:
-                adata.var[k] = np.logical_or(adata.var[k], adata.var_names.str.startswith(s))
-            
+                adata.var[k] = np.logical_or(adata.var[k], adata.var_names.str.lower().str.startswith(s))
+
         sc.pp.calculate_qc_metrics(adata, qc_vars=[k], percent_top=None, log1p=False, inplace=True)
 
     adata.var['nomalat'] = np.invert(adata.var['malat'])
     sc.pp.calculate_qc_metrics(adata, qc_vars=['nomalat'], percent_top=[1], log1p=False, inplace=True)
 
 
-def trim_outliers(x, y, groups=None, extra_mask=None, pct=100):
+def trim_outliers(x, y, sample_list=None, extra_mask=None, pct=100):
     """Function to fit a line in log space, trim outliers, and return boolean mask.
 
     Parameters
@@ -100,9 +93,9 @@ def trim_outliers(x, y, groups=None, extra_mask=None, pct=100):
     if extra_mask is None:
         extra_mask = np.ones(x_.shape[0], dtype=bool)
 
-    if groups is not None:
-        for g in groups.unique():
-            mask_g = groups == g
+    if sample_list is not None:
+        for g in sample_list:
+            mask_g = sample_list == g
             mask[mask_g] = trim_outliers(x_[mask_g], y_[mask_g], extra_mask=extra_mask[mask_g], pct=pct)
         return mask
     
@@ -682,7 +675,7 @@ def get_pseudobulk(adata, min_cells=10, sample='sample', group='group'):
     dc.tl.rankby_obsm(pdata, key="X_pca")
 
     sc.pl.pca_variance_ratio(pdata)
-    dc.pl.obsm(adata=pdata, return_fig=True, nvar=5, dendrogram=False,
+    dc.pl.obsm(adata=pdata, return_fig=True, nvar=5, dendrogram=True,
                titles=["PC scores", "Adjusted p-values"], figsize=(10, 5))
 
     sc.pl.pca(
