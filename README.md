@@ -17,23 +17,16 @@ import scrna_functions as scfunc
 ```python
 import scrna_functions as sf
 
-# Example usage
-mask = sf.trim_outliers(x, y, pct=95)
+# wrap some common tasks
+import anndata as ad
+adata = ad.read_h5ad('your_data.h5ad')
+sf.do_qc(adata)
 sf.plot_gene_counts(adata, hue='sample')
-adata_normalized = sf.clr_normalize_each_cell(adata)
 
-# Load marker genes
-marker_genes = sf.load_marker_genes()  # Original case
-marker_genes_human = sf.load_marker_genes(case='upper')  # For human data
-marker_genes_mouse = sf.load_marker_genes(case='title')  # For mouse data
-
-# Filter genes present in your data (use appropriate case when loading)
-filtered_genes = sf.filter_genes_in_adata(marker_genes_mouse, adata)
-
-# Load cell cycle genes
-cc_genes = sf.load_cell_cycle_genes(case='upper')  # For human data
-s_genes = cc_genes['s_genes']
-g2m_genes = cc_genes['g2m_genes']
+# load marker genes, e.g. for use with decoupler
+markers = scfunc.CellTypeMarkers('human')
+markers.filter_genes(adata.var_names, verbose=True)
+marker_genes = markers.to_dict(include_secondary=False)
 ```
 
 ## Functions
