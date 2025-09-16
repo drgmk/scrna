@@ -53,7 +53,10 @@ Repository = "https://github.com/yourusername/scrna-functions"
 Issues = "https://github.com/yourusername/scrna-functions/issues"
 
 [tool.setuptools]
-packages = ["scrna_functions"]
+packages = ["scrna_functions", "scripts"]
+
+[project.scripts]
+scrna_firstlook = "scripts.firstlook:main"
 
 [tool.black]
 line-length = 88

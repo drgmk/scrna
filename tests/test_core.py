@@ -15,17 +15,15 @@ def test_get_plot_list(pbmc):
     assert isinstance(result, list)
 
 def test_do_qc(pbmc):
-    core.do_qc(pbmc)
+    core.compute_qc_metrics(pbmc)
     # No return, just check no error
 
 def test_trim_outliers(pbmc):
-    x = pbmc.obs['n_genes_by_counts']
-    y = pbmc.obs['total_counts']
-    mask = core.trim_outliers(x, y)
-    assert len(mask) == len(x)
+    mask = core.trim_outliers(pbmc, x='n_genes_by_counts', y='total_counts')
+    assert len(mask) == len(pbmc.obs)
 
 def test_plot_gene_counts(pbmc):
-    core.do_qc(pbmc)
+    core.compute_qc_metrics(pbmc)
     fig = core.plot_gene_counts(pbmc)
     assert fig is not None
 
@@ -66,9 +64,6 @@ def test_pca_heatmap(pbmc):
     fig = core.pca_heatmap(pbmc, component=0)
     assert fig is not None
 
-def test_load_cell_cycle_genes():
-    result = core.load_cell_cycle_genes('human')
-    assert 's_genes' in result and 'g2m_genes' in result
 
 def test_remove_doublet_clusters(pbmc):
     pbmc.obs['predicted_doublet'] = [False] * (pbmc.n_obs - 10) + [True] * 10
@@ -83,6 +78,53 @@ def test_get_vmax(pbmc):
         assert isinstance(vmax, list)
 
 def test_cellphonedb_prepare(pbmc):
-    pass
+    # Placeholder: test for cellphonedb_prepare
+    # Not trivial to test without file system and CellPhoneDB setup
+    assert True
+def test_plot_nxy():
+    # Placeholder: test for plot_nxy
+    x, y = core.plot_nxy(5)
+    assert isinstance(x, int) and isinstance(y, int)
+
+def test_guess_human_or_mouse(pbmc):
+    # Placeholder: test for guess_human_or_mouse
+    result = core.guess_human_or_mouse(pbmc)
+    assert result in ['human', 'mouse']
+
+def test_compute_qc_metrics(pbmc):
+    # Placeholder: test for compute_qc_metrics
+    core.compute_qc_metrics(pbmc)
+    assert 'pct_counts' in pbmc.uns
+
+def test_filter_cells_genes(pbmc):
+    # Placeholder: test for filter_cells_genes
+    core.filter_cells_genes(pbmc)
+    assert 'filter_cells_genes' in pbmc.uns
+
+def test_get_cell_cycle_genes(pbmc):
+    # Placeholder: test for get_cell_cycle_genes
+    result = core.get_cell_cycle_genes('human')
+    assert 's_genes' in result and 'g2m_genes' in result
+
+def test_rank_genes_groups_to_df(pbmc):
+    # Placeholder: test for rank_genes_groups_to_df
+    sc.tl.rank_genes_groups(pbmc, groupby='sample', group='A', reference='B', method='t-test')
+    df = core.rank_genes_groups_to_df(pbmc)
+    assert df is not None
+
+def test_get_pseudobulk(pbmc):
+    # Placeholder: test for get_pseudobulk
+    # Not trivial to test without decoupler setup
+    assert True
+
+def test_do_deg(pbmc):
+    # Placeholder: test for do_deg
+    # Not trivial to test without DESeq2 setup
+    assert True
+
+def test_celltypist_annotate_immune(pbmc):
+    # Placeholder: test for celltypist_annotate_immune
+    # Not trivial to test without celltypist model
+    assert True
 
 

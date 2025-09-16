@@ -1,6 +1,7 @@
 import os
 import shutil
 from pathlib import Path
+from xml.parsers.expat import model
 import numpy as np
 import scipy.stats
 import matplotlib.pyplot as plt
@@ -14,10 +15,47 @@ from pydeseq2.dds import DeseqDataSet, DefaultInference
 from pydeseq2.ds import DeseqStats
 from cellphonedb.src.core.methods import cpdb_statistical_analysis_method
 import celltypist
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+
+def plot_nxy(n):
+    """Return no of x, y panels for plotting approx square panels."""
+    if n < 4:
+        y = 1
+    elif n < 9:
+        y = 2
+    elif n < 16:
+        y = 3
+    else:
+        y = 4  # ok up to n=24
+    x = int(np.ceil(n / y))
+    return x, y
+
+
+def guess_human_or_mouse(adata):
+    """Guess if data is human or mouse based on mitochondrial gene names.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data matrix containing RNA expression data.
+        """
+    # pick n random var_names and see if mostly uppercase (else assume capitalized)
+    pick_n = 50
+    var_names_sample = np.random.choice(adata.var_names, size=pick_n, replace=False)
+    n_caps = 0
+    for g in var_names_sample:
+        if g.isupper():
+            n_caps += 1
+
+    if n_caps > pick_n / 2:
+        return 'human'
+    else:
+        return 'mouse'
 
 
 def get_plot_list(adata=None):
-    """Get list of QC plots that can be made based on available columns in adata.obs.
+    """Get list of QC quantities based on available columns in adata.obs.
 
     Parameters
     ----------
@@ -37,7 +75,7 @@ def get_plot_list(adata=None):
     return tmp
 
 
-def do_qc(adata, extra_genes=[]):
+def compute_qc_metrics(adata, extra_genes=[]):
     """Calculate QC metrics for RNA data.
     
     Parameters
@@ -67,11 +105,32 @@ def do_qc(adata, extra_genes=[]):
 
         sc.pp.calculate_qc_metrics(adata, qc_vars=[k], percent_top=None, log1p=False, inplace=True)
 
-    adata.var['nomalat'] = np.invert(adata.var['malat'])
-    sc.pp.calculate_qc_metrics(adata, qc_vars=['nomalat'], percent_top=[1], log1p=False, inplace=True)
+    # also calculate percent in top gene
+    sc.pp.calculate_qc_metrics(adata, qc_vars=(), percent_top=[1], log1p=False, inplace=True)
+
+    # add meta to adata.uns
+    adata.uns['pct_counts'] = pct_counts
+    
+
+def filter_cells_genes(adata, min_genes=200, min_cells=3):
+    """Filter cells and genes based on minimum counts, inplace.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data matrix containing RNA expression data.
+    min_genes : int, optional
+        Minimum number of genes expressed for a cell to be kept.
+    min_cells : int, optional
+        Minimum number of cells a gene must be expressed in to be kept.
+    """
+    sc.pp.filter_cells(adata, min_genes=min_genes)
+    sc.pp.filter_genes(adata, min_cells=min_cells)
+    adata.uns['filter_cells_genes'] = {'min_genes': min_genes, 'min_cells': min_cells}
 
 
-def trim_outliers(x, y, sample_list=None, extra_mask=None, pct=100):
+def trim_outliers(adata, x='total_counts', y='n_genes_by_counts', groupby=None,
+                  extra_mask=None, pct=100.0):
     """Function to fit a line in log space, trim outliers, and return boolean mask.
 
     Parameters
@@ -82,32 +141,47 @@ def trim_outliers(x, y, sample_list=None, extra_mask=None, pct=100):
         Dependent variable.
     groups : array-like, optional
         Group names, to trim outliers per-group.
-    extra_mask : array-like, optional
-        Extra mask to apply before trimming outliers.
+    extra_mask : dict, optional
+        Dictionary specifying additional masks to apply before trimming outliers.
+        Format is {column_name: (threshold, 'min' or 'max')}.
     pct : int, optional
         Percentile to use for trimming outliers, default is 100 (no trimming).
     """
-    x_ = np.log10(x)
-    y_ = np.log10(y)
-    mask = np.ones(x_.shape[0], dtype=bool)
-    if extra_mask is None:
-        extra_mask = np.ones(x_.shape[0], dtype=bool)
+           
+    mask = np.ones(adata.shape[0], dtype=bool)
 
-    if sample_list is not None:
-        for g in np.unique(sample_list):
-            mask_g = sample_list == g
-            mask[mask_g] = trim_outliers(x_[mask_g], y_[mask_g], extra_mask=extra_mask[mask_g], pct=pct)
+    if groupby is not None:
+        for g in np.unique(adata.obs[groupby]):
+            mask_g = adata.obs[groupby] == g
+            mask[mask_g] = trim_outliers(adata[mask_g, :], x=x, y=y, extra_mask=extra_mask, pct=pct)
+
+        adata.uns['trim_outliers_mask'] = mask
         return mask
-    
-    fit = scipy.stats.linregress(x_[extra_mask], y_[extra_mask])
+
+    if extra_mask is None:
+        extra_mask_ = np.ones(adata.shape[0], dtype=bool)
+    else:
+        extra_mask_ = np.ones(adata.shape[0], dtype=bool)
+        for k, v in extra_mask.items():
+            if v[1] == 'max':
+                extra_mask_ = np.logical_and(extra_mask_, adata.obs[k] < v[0])
+            elif v[1] == 'min':
+                extra_mask_ = np.logical_and(extra_mask_, adata.obs[k] > v[0])
+            else:
+                raise ValueError(f'unknown key {k} in extra_mask, must contain "min" or "max"')
+
+    x_ = np.log10(adata.obs[x])
+    y_ = np.log10(adata.obs[y])
+    fit = scipy.stats.linregress(x_[extra_mask_], y_[extra_mask_])
     y_fit = fit.intercept + fit.slope * x_
     resid = y_ - y_fit
     thresh = np.percentile(resid, [100-pct, pct])
     mask = np.logical_and(resid > thresh[0], resid < thresh[1])
-    return np.logical_and(mask, extra_mask)
+    adata.uns['trim_outliers_mask'] = mask
+    return np.logical_and(mask, extra_mask_)
 
 
-def plot_gene_counts(adata, hue='sample', mask=None, order=None,
+def plot_gene_counts(adata, hue='sample', mask=None, order=None, show_masked=True,
                      colour_by='pct_counts_in_top_1_genes',
                      size_by='pct_counts_mt',):
     """Plot gene counts and mitochondrial fraction for each sample.
@@ -135,34 +209,46 @@ def plot_gene_counts(adata, hue='sample', mask=None, order=None,
 
     vmax = np.max(adata[mask].obs[colour_by]) if colour_by in adata.obs.columns else None
 
-    npanel2 = int(np.ceil(len(order)/2))
-    fig, ax = plt.subplots(2, npanel2,
+    nx, ny = plot_nxy(len(order))
+    fig, ax = plt.subplots(ny, nx,
                            sharey=True, sharex=True,
-                           figsize=(npanel2*2.5, 6))
-    ax = ax.reshape(2, npanel2)
-    
+                           figsize=(10, 7))
+
     for i, s in enumerate(order):
-        tmp = adata[(adata.obs[hue] == s) & mask, :]
         a = ax.flatten()[i]
-        _ = a.scatter(tmp.obs.total_counts, tmp.obs.n_genes_by_counts,
+        tmp = adata[(adata.obs[hue] == s) & mask, :]
+        _ = a.scatter(tmp.obs['total_counts'], tmp.obs['n_genes_by_counts'],
                     s=tmp.obs[size_by]/4, c=tmp.obs[colour_by],
-                    vmin=0, vmax=vmax)
-        
+                    vmin=0, vmax=vmax, cmap='viridis')
+        if show_masked:
+            tmp = adata[(adata.obs[hue] == s) & np.invert(mask), :]
+            a.scatter(tmp.obs['total_counts'], tmp.obs['n_genes_by_counts'],
+                      s=tmp.obs[size_by]/4, c='lightgrey', alpha=0.5, zorder=-1)
+                    #   s=tmp.obs[size_by]/4, c=tmp.obs[colour_by], alpha=0.2,
+                    #   vmin=0, vmax=vmax, cmap='Grays', zorder=-1)
+
         a.set_title(s)
 
     [a.set_visible(False) for a in ax.flatten()[i+1:]]
-    ax[1,0].set_ylabel('n_genes_by_counts')
-    ax[1,0].set_xlabel('total_counts')
+    if ny == 1:
+        ax = ax[np.newaxis, :]
+    ax[ny-1,0].set_ylabel('n_genes_by_counts')
+    ax[ny-1,0].set_xlabel('total_counts')
     ax[0,0].set_xscale('log')
     ax[0,0].set_yscale('log')
 
-    cb = fig.colorbar(_)
+    # Place colorbar to the right of all axes, spanning full height
+    # divider = make_axes_locatable(ax.flatten()[-1])
+    # cax = divider.append_axes("right", size="5%", pad=0.05)
+    fig.tight_layout()
+    fig.subplots_adjust(right=0.88)
+    cbar_ax = fig.add_axes([0.9, 0.15, 0.02, 0.7]) 
+    cb = fig.colorbar(_, cax=cbar_ax, aspect=30)
     cb.set_label(colour_by)
     # turn grid on for all axes
     for a in ax.flatten():
         a.grid(True, which='both', linestyle='-', linewidth=0.5, alpha=0.5)
         a.set_axisbelow(True)
-    fig.tight_layout()
     return fig
 
 
@@ -180,13 +266,13 @@ def plot_top_genes(adata, hue='sample', n_top=10, order=None):
     """
     if order is None:
         order = adata.obs[hue].unique()
-    npanel2 = int(np.ceil(len(order)/2))
-    fig, ax = plt.subplots(2, npanel2, figsize=(18, 10), sharex=True, sharey=True)
-    ax = ax.reshape(2, npanel2)
+    nx, ny = plot_nxy(len(order))
+    fig, ax = plt.subplots(ny, nx, figsize=(18, 10), sharex=True, sharey=True)
     for i, s in enumerate(order):
-        sc.pl.highest_expr_genes(adata[adata.obs[hue] == s].copy(), n_top=n_top, log=True, ax=ax[i//npanel2, i%npanel2], show=False)
-        ax[i//npanel2, i%npanel2].axvline(x=1, alpha=0.5)
-        ax[i//npanel2, i%npanel2].set_title(s)
+        a = ax.flatten()[i]
+        sc.pl.highest_expr_genes(adata[adata.obs[hue] == s].copy(), n_top=n_top, log=True, ax=a, show=False)
+        a.axvline(x=1, alpha=0.5)
+        a.set_title(s)
 
     fig.tight_layout()
     return fig
@@ -206,8 +292,8 @@ def plot_umaps(adata, hue='sample', order=None):
     """
     if order is None:
         order = adata.obs[hue].unique()
-    npanel2 = int(np.ceil((len(order)+1)/2))
-    fig, ax = plt.subplots(2, npanel2, figsize=(15,8), sharex=True, sharey=True)
+    nx, ny = plot_nxy(len(order)+1)
+    fig, ax = plt.subplots(ny, nx, figsize=(15,8), sharex=True, sharey=True)
     for i, s in enumerate(order):
         a = ax.flatten()[i]
         sc.pl.umap(adata[adata.obs[hue] == s], ax=a, show=False, size=10)
@@ -494,7 +580,7 @@ def pca_heatmap(adata, component, n_genes=30, layer=None):
     return fig
 
 
-def load_cell_cycle_genes(organism, gene_list=None):
+def get_cell_cycle_genes(organism, gene_list=None):
     """Load cell cycle genes from the Tirosh et al. file included with the package.
     
     Parameters
@@ -569,7 +655,7 @@ def load_cell_cycle_genes(organism, gene_list=None):
 
 def remove_doublet_clusters(adata, groupby='leiden'):
     """Remove groups identified as majority doublets by Scrublet."""
-    tmp = adata.obs.groupby(groupby)['predicted_doublet'].agg(pd.Series.mode).reset_index()
+    tmp = adata.obs.groupby(groupby, observed=False)['predicted_doublet'].agg(pd.Series.mode).reset_index()
     
     if tmp['predicted_doublet'].sum() == 0:
         print('no doublet clusters found')
@@ -749,7 +835,7 @@ def do_deg(pdata, design, contrast):
     return stat_res.results_df
 
 
-def celltypist_annotate(adata, recluster=False):
+def celltypist_annotate_immune(adata, recluster=False):
     """Quick annotation of cell types using CellTypist.
 
     Parameters
@@ -767,16 +853,32 @@ def celltypist_annotate(adata, recluster=False):
         sc.tl.leiden(adata, resolution=0.8)
 
     rna_tmp = adata.copy()
-    rna_tmp.X = rna_tmp.layers['norm_1e4']
+    # use 10k normalised data if available
+    if 'norm_1e4' in rna_tmp.layers.keys():
+        rna_tmp.X = rna_tmp.layers['norm_1e4']
 
-    predictions_subtypes = celltypist.annotate(rna_tmp, model = 'Immune_All_Low.pkl', majority_voting = True)
-    rna_tmp = predictions_subtypes.to_adata(prefix='subtypes_')
-    predictions_maintypes = celltypist.annotate(rna_tmp, model = 'Immune_All_High.pkl', majority_voting = True)
+    models = ['Immune_All_Low.pkl', 'Immune_All_High.pkl']
+    organism = guess_human_or_mouse(rna_tmp)
+    if organism == 'mouse':
+        all_models = celltypist.models.get_all_models()
+        for i, m in enumerate(models):
+            models[i] = m.replace('_All_', '_Mouse_')
+            if models[i] in all_models:
+                continue
+            print(f'converting {m} to mouse version')
+            model = celltypist.Model.load(m)
+            model.convert()
+            model.write(celltypist.models.models_path + '/' + models[i])
+
+    predictions_maintypes = celltypist.annotate(rna_tmp, model = models[1], majority_voting = True)
     rna_tmp = predictions_maintypes.to_adata(prefix='maintypes_')
+    predictions_subtypes = celltypist.annotate(rna_tmp, model = models[0], majority_voting = True)
+    rna_tmp = predictions_subtypes.to_adata(prefix='subtypes_')
 
     for col in rna_tmp.obs.columns:
         if col.startswith('subtypes_') or col.startswith('maintypes_'):
             adata.obs[col] = rna_tmp.obs[col].copy()
+            adata.obs.rename(columns={col: col.replace('majority_voting', 'immune')}, inplace=True)
 
 
 def cellphonedb_prepare(adata, annotation, outdir, layer=None,

@@ -20,11 +20,11 @@ import scrna_functions as sf
 # wrap some common tasks
 import anndata as ad
 adata = ad.read_h5ad('your_data.h5ad')
-sf.do_qc(adata)
+sf.compute_qc_metrics(adata)
 sf.plot_gene_counts(adata, hue='sample')
 
 # load marker genes, e.g. for use with decoupler
-markers = scfunc.CellTypeMarkers('human')
+markers = sf.CellTypeMarkers('human')
 markers.filter_genes(adata.var_names, verbose=True)
 marker_genes = markers.to_dict(include_secondary=False)
 ```
@@ -32,7 +32,7 @@ marker_genes = markers.to_dict(include_secondary=False)
 ## Functions
 
 - `get_plot_list`: List available QC plots for AnnData
-- `do_qc`: Calculate QC metrics for RNA data
+- `compute_qc_metrics`: Calculate QC metrics for RNA data
 - `trim_outliers`: Fit a line in log space and trim outliers
 - `plot_gene_counts`: Plot gene counts and mitochondrial fraction for each sample
 - `plot_top_genes`: Plot top N most highly expressed genes for each sample
@@ -44,13 +44,13 @@ marker_genes = markers.to_dict(include_secondary=False)
 - `normalisation_check`: Check normalization of RNA data
 - `normalisation_plots`: Combined plots to check normalization
 - `pca_heatmap`: Seurat DimHeatmap equivalent for PCA components
-- `load_cell_cycle_genes`: Load cell cycle genes from Tirosh et al. file
+- `get_cell_cycle_genes`: Load cell cycle genes from Tirosh et al. file
 - `remove_doublet_clusters`: Remove clusters identified as doublets
 - `get_vmax`: Get vmax values for marker genes
 - `rank_genes_groups_to_df`: Convert sc.tl.rank_genes_groups results to DataFrame
 - `get_pseudobulk`: Create pseudobulk data and perform PCA
 - `do_deg`: Differential expression analysis using DESeq2 via decoupler
-- `celltypist_annotate`: Annotate cell types using CellTypist
+- `celltypist_annotate_immune`: Annotate cell types using CellTypist
 - `cellphonedb_prepare`: Export data and run CellPhoneDB analysis
 
 ## License
