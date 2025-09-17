@@ -405,7 +405,10 @@ def main():
     # Save metrics_table as an image
     metrics_table_path = figs_path / "metrics_table.png"
     with open(metrics_table_path, "wb") as f:
-        dfi.export(metrics_table, f)  # may have to watch for errors if used as a script
+        try:
+            dfi.export(metrics_table, f)
+        except Error:
+            dfi.export(metrics_table, f, table_conversion="matplotlib")
 
     # Prepare file paths for images
     pdfs = [
