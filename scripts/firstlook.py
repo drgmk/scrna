@@ -1,9 +1,4 @@
-
-# First look
-# Automated first look analysis of single cell RNA-seq data.
-# - Aim is to use scrna-functions to make a first pass and give an idea of data quality and content.
-# - We will assume that there has been a little bit of organising, i.e. combining data into one h5ad file with sample and groups in `adata.obs`.
-# - We will also assume that any metrics metadata will be pointed to, relative to `adata.h5ad`, with a per-sample dictionaryin `adata.uns['metrics_files']`.
+# First look; see notebook version for more comments
 
 import os
 from pathlib import Path
@@ -24,38 +19,104 @@ import dataframe_image as dfi
 
 def main():
     # Default values for CLI
-    figs_path = './figures/firstlook/'
-    sample_col = 'sample'
-    # group_col = ''
+    figs_path = "./figures/firstlook/"
+    sample_col = "sample"
+    group_col = ""
     use_raw = False
-    max_mt_pct = 20.
-    max_top1_pct = 15.
+    max_mt_pct = 20.0
+    max_top1_pct = 15.0
     min_genes = 200
     min_cells = 3
-    pct_outlier_cutoff = 99.
+    pct_outlier_cutoff = 99.0
     n_neighbours = 20
     leiden_res = 0.8
 
-    parser = argparse.ArgumentParser(description="First look at single-cell RNA-seq data")
-    parser.add_argument("--file_path", "-f", type=str, help="Path to the input .h5ad file")
-    parser.add_argument("--figs_path", type=str, default=figs_path, metavar=figs_path, help="Path to save figures")
-    parser.add_argument("--sample_col", type=str, default=sample_col, metavar=sample_col, help="Column name for independent samples")
-    # parser.add_argument("--group_col", type=str, default=group_col, metavar=group_col, help="Column name for grouping samples")
-    parser.add_argument("--use_raw", action='store_true', default=use_raw, help="Use raw data if set")
-    parser.add_argument("--max_mt_pct", type=float, default=max_mt_pct, metavar=max_mt_pct, help="Max mitochondrial percentage for QC")
-    parser.add_argument("--max_top1_pct", type=float, default=max_top1_pct, metavar=max_top1_pct, help="Max top 1 gene percentage for QC")
-    parser.add_argument("--min_genes", type=int, default=min_genes, metavar=min_genes, help="Min genes per cell for QC")
-    parser.add_argument("--min_cells", type=int, default=min_cells, metavar=min_cells, help="Min cells per gene for QC")
-    parser.add_argument("--pct_outlier_cutoff", type=float, default=pct_outlier_cutoff, metavar=pct_outlier_cutoff, help="Percentile cutoff for outlier detection")
-    parser.add_argument("--n_neighbours", type=int, default=n_neighbours, metavar=n_neighbours, help="Number of neighbours for clustering")
-    parser.add_argument("--leiden_res", type=float, default=leiden_res, metavar=leiden_res, help="Leiden clustering resolution")
+    parser = argparse.ArgumentParser(
+        description="First look at single-cell RNA-seq data"
+    )
+    parser.add_argument(
+        "--file_path", "-f", type=str, help="Path to the input .h5ad file"
+    )
+    parser.add_argument(
+        "--figs_path",
+        type=str,
+        default=figs_path,
+        metavar=figs_path,
+        help="Path to save figures",
+    )
+    parser.add_argument(
+        "--sample_col",
+        type=str,
+        default=sample_col,
+        metavar=sample_col,
+        help="Column name for independent samples",
+    )
+    parser.add_argument(
+        "--group_col",
+        type=str,
+        default=group_col,
+        metavar=group_col,
+        help="Column name for grouping samples",
+    )
+    parser.add_argument(
+        "--use_raw", action="store_true", default=use_raw, help="Use raw data if set"
+    )
+    parser.add_argument(
+        "--max_mt_pct",
+        type=float,
+        default=max_mt_pct,
+        metavar=str(max_mt_pct),
+        help="Max mitochondrial percentage for QC",
+    )
+    parser.add_argument(
+        "--max_top1_pct",
+        type=float,
+        default=max_top1_pct,
+        metavar=str(max_top1_pct),
+        help="Max top 1 gene percentage for QC",
+    )
+    parser.add_argument(
+        "--min_genes",
+        type=int,
+        default=min_genes,
+        metavar=str(min_genes),
+        help="Min genes per cell for QC",
+    )
+    parser.add_argument(
+        "--min_cells",
+        type=int,
+        default=min_cells,
+        metavar=str(min_cells),
+        help="Min cells per gene for QC",
+    )
+    parser.add_argument(
+        "--pct_outlier_cutoff",
+        type=float,
+        default=pct_outlier_cutoff,
+        metavar=str(pct_outlier_cutoff),
+        help="Percentile cutoff for outlier detection",
+    )
+    parser.add_argument(
+        "--n_neighbours",
+        type=int,
+        default=n_neighbours,
+        metavar=str(n_neighbours),
+        help="Number of neighbours for clustering",
+    )
+    parser.add_argument(
+        "--leiden_res",
+        type=float,
+        default=leiden_res,
+        metavar=str(leiden_res),
+        help="Leiden clustering resolution",
+    )
 
     args = parser.parse_args()
 
     file_path = Path(args.file_path)
     figs_path = Path(args.figs_path)
     sample_col = args.sample_col
-    # group_col = args.group_col
+    group_col = args.group_col
     use_raw = args.use_raw
     max_mt_pct = args.max_mt_pct
     max_top1_pct = args.max_top1_pct
@@ -72,7 +133,7 @@ def main():
     rna = sc.read_h5ad(file_path)
     rna.var_names_make_unique()
     rna.obs_names_make_unique()
-    print(f'reading: {file_path}')
+    print(f"reading: {file_path}")
     print(rna)
 
     # todo: check if there is also VDJ or other data
@@ -82,60 +143,143 @@ def main():
     else:
         rna.raw = rna.copy()
 
-    if 'sample_order' in rna.uns:
-        sample_order = rna.uns['sample_order']
+    # sample details
+    if "sample_order" in rna.uns:
+        sample_order = rna.uns["sample_order"]
     else:
         sample_order = sorted(rna.obs[sample_col].unique().tolist())
 
+    sample_numbers = {s: i + 1 for i, s in enumerate(sample_order)}
+    rna.obs["samp_no"] = pd.Categorical(rna.obs[sample_col].map(sample_numbers))
+    sample_number_order = [sample_numbers[s] for s in sample_order]
+
+    # assume each sample belongs to a unique group (e.g. infected vs control)
+    if group_col != "":
+        groups = rna.obs[group_col].unique().tolist()
+        sample_group_mapping = {}
+        for g in groups:
+            samples_in_group = (
+                rna.obs.loc[rna.obs[group_col] == g, sample_col].unique().tolist()
+            )
+            for s in samples_in_group:
+                if s in sample_group_mapping.keys():
+                    raise ValueError(f"Sample {s} appears in multiple groups!")
+                sample_group_mapping[s] = g
+
     # Guess whether human or mouse
     organism = scfunc.guess_human_or_mouse(rna)
-    print(f'assuming organism: {organism}')
+    print(f"assuming organism: {organism}")
 
-    # Metrics
-    if 'metrics_files' in rna.uns:
+    # compile/generate metrics table and plot
+    if "metrics_summary" in rna.uns:
         metrics = []
-        for s, f in rna.uns['metrics_files'].items():
-            metrics.append(pd.read_csv(file_path / f))
-            metrics[-1]['index'] = s
+        # for s, df in rna.uns['metrics_summary'].items():
+        for s in sample_order:
+            df = rna.uns["metrics_summary"][s]
+            metrics.append(df)
+            metrics[-1]["sample"] = s
+            metrics[-1]["samp_no"] = [sample_numbers[s]]
+            metrics[-1][group_col] = sample_group_mapping[s] if group_col != "" else ""
+            # convert to float if possible
             for c in metrics[-1].columns:
                 try:
-                    metrics[-1][c] = metrics[-1][c].str.replace(',', '', regex=False).str.replace('%', '', regex=False).astype(float)
+                    metrics[-1][c] = (
+                        metrics[-1][c]
+                        .str.replace(",", "", regex=False)
+                        .str.replace("%", "", regex=False)
+                        .astype(float)
+                    )
                 except:
                     pass
+
         metrics = pd.concat(metrics)
-        metrics['index'] = metrics['index'].str.split('/')
-        metrics['index'] = list(map(lambda x: x[-2], metrics['index']))
-        metrics.set_index('index', inplace=True)
-        keep_cols = ['Estimated Number of Cells', 'Mean Reads per Cell', 'Median Genes per Cell', 'Total Genes Detected',
-                    'Valid Barcodes', 'Reads Mapped Confidently to Genome', 'Sequencing Saturation']
-        metrics_table = metrics[keep_cols].T
-        fig, ax = plt.subplots()
-        sns.scatterplot(metrics, x='Estimated Number of Cells', y='Mean Reads per Cell', size='Median Genes per Cell',
-                        hue=metrics.index, legend=True, ax=ax)
-        ax.set_xscale('log')
-        ax.set_yscale('log')
-        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0)
-        fig.tight_layout()
-        fig.savefig(str(figs_path / 'metrics_scatter.png'))
+        metrics.set_index("samp_no", inplace=True)
+
+        keep_cols = [
+            "sample",
+            group_col,
+            "Estimated Number of Cells",
+            "Mean Reads per Cell",
+            "Median Genes per Cell",
+            "Total Genes Detected",
+            "Valid Barcodes",
+            "Reads Mapped Confidently to Genome",
+            "Sequencing Saturation",
+        ]
+
+        metrics_table = metrics[keep_cols]
+
+        # diagnostic plot for outliers
+        fig, ax = plt.subplots(figsize=(7, 5))
+        sns.scatterplot(
+            metrics_table,
+            x="Estimated Number of Cells",
+            y="Mean Reads per Cell",
+            size="Median Genes per Cell",
+            hue=metrics_table.index,
+            style=group_col,
+            legend=True,
+            ax=ax,
+        )
+
     else:
-        metrics_table = pd.DataFrame({'sample': sample_order, 
-                                      'Estimated Number of Cells': rna.obs[sample_col].value_counts().reindex(sample_order).values,
-                                      'Total Genes Detected': [rna[rna.obs[sample_col] == s].n_vars for s in sample_order]})
-        metrics_table.set_index('sample', inplace=True)
-        metrics_table = metrics_table.T
+        metrics_table = pd.DataFrame(
+            {
+                "sample": sample_order,
+                "Estimated Number of Cells": rna.obs[sample_col]
+                .value_counts()
+                .reindex(sample_order)
+                .values,
+                "Total Genes Detected": [
+                    rna[rna.obs[sample_col] == s].n_vars for s in sample_order
+                ],
+            }
+        )
+        metrics_table["samp_no"] = metrics_table["sample"].map(sample_numbers)
+        metrics_table["group"] = (
+            metrics_table["sample"].map(sample_group_mapping) if group_col != "" else ""
+        )
+        metrics_table.set_index("samp_no", inplace=True)
+
+        # diagnostic plot for outliers
+        fig, ax = plt.subplots(figsize=(7, 5))
+        sns.scatterplot(
+            metrics_table,
+            x="Estimated Number of Cells",
+            y="Total Genes Detected",
+            hue=metrics_table.index,
+            style="group",
+            legend=True,
+            ax=ax,
+        )
+
+    ax.set_title(
+        f"metrics overview {'(basic)' if 'metrics_summary' not in rna.uns else ''}"
+    )
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left", borderaxespad=0)
+    fig.tight_layout()
+    fig.savefig(str(figs_path / "metrics_scatter.pdf"))
 
     # Quality control
     scfunc.filter_cells_genes(rna)
     scfunc.compute_qc_metrics(rna)
 
-    mask = scfunc.trim_outliers(rna, groupby=sample_col,
-                                extra_mask={'pct_counts_mt': [max_mt_pct, 'max'],
-                                            'pct_counts_in_top_1_genes': [max_top1_pct, 'max']},
-                                pct=pct_outlier_cutoff,
-                                )
+    mask = scfunc.trim_outliers(
+        rna,
+        groupby=sample_col,
+        extra_mask={
+            "pct_counts_mt": [max_mt_pct, "max"],
+            "pct_counts_in_top_1_genes": [max_top1_pct, "max"],
+        },
+        pct=pct_outlier_cutoff,
+    )
 
-    fig = scfunc.plot_gene_counts(rna, hue=sample_col, order=sample_order, mask=mask, show_masked=True)
-    fig.savefig(str(figs_path / 'gene_counts_per_sample.pdf'))
+    fig = scfunc.plot_gene_counts(
+        rna, hue="samp_no", order=sample_number_order, mask=mask, show_masked=True
+    )
+    fig.savefig(str(figs_path / "gene_counts_per_sample.pdf"))
 
     # apply mask
     rna = rna[mask, :].copy()
@@ -145,7 +289,11 @@ def main():
 
     # Cell cycle
     cell_cycle_genes = scfunc.get_cell_cycle_genes(organism, gene_list=rna.var_names)
-    sc.tl.score_genes_cell_cycle(rna, s_genes=cell_cycle_genes['s_genes'], g2m_genes=cell_cycle_genes['g2m_genes'])
+    sc.tl.score_genes_cell_cycle(
+        rna,
+        s_genes=cell_cycle_genes["s_genes"],
+        g2m_genes=cell_cycle_genes["g2m_genes"],
+    )
 
     # UMAPs
     sc.pp.normalize_total(rna, target_sum=1e4)
@@ -157,17 +305,25 @@ def main():
     sc.tl.umap(rna, random_state=42)
     sc.tl.leiden(rna, resolution=leiden_res)
 
-    fig , ax = plt.subplots(2, 2, figsize=(10,7))
-    for i, x in enumerate(zip([sample_col, 'predicted_doublet', 'S_score', 'G2M_score'],
-                              [False, False, True, True])):
+    # fix this (again)
+    rna.obs["samp_no"] = pd.Categorical(rna.obs["samp_no"])
+
+    fig, ax = plt.subplots(2, 2, figsize=(10, 7))
+    for i, x in enumerate(
+        zip(
+            ["samp_no", "predicted_doublet", "S_score", "G2M_score"],
+            [False, False, True, True],
+        )
+    ):
         col, vminmax = x
         vmin, vmax = None, None
         if vminmax:
             vmin, vmax = np.percentile(rna.obs[col], (1, 99))
-        sc.pl.umap(rna, color=col, vmin=vmin, vmax=vmax,
-                   ax=ax[i//2, i%2], show=False)
+        sc.pl.umap(
+            rna, color=col, vmin=vmin, vmax=vmax, ax=ax[i // 2, i % 2], show=False
+        )
     fig.tight_layout()
-    fig.savefig(str(figs_path / 'umap_overview.pdf'))
+    fig.savefig(str(figs_path / "umap_overview.pdf"))
 
     # cell types
     markers = dc.op.resource("PanglaoDB", organism=organism)
@@ -177,63 +333,168 @@ def main():
         & (markers[f"{organism}_sensitivity"].astype(float) > 0.5)
     ]
     markers = markers[~markers.duplicated(["cell_type", "genesymbol"])]
-    markers = markers.rename(columns={"cell_type": "source", "genesymbol": "target", f"{organism}_sensitivity": "weight"})
+    markers = markers.rename(
+        columns={
+            "cell_type": "source",
+            "genesymbol": "target",
+            f"{organism}_sensitivity": "weight",
+        }
+    )
     markers = markers[["source", "target", "weight"]]
     dc.mt.ulm(rna, markers, verbose=False)
     score = dc.pp.get_obsm(rna, key="score_ulm")
-    df = dc.tl.rankby_group(adata=score, groupby="leiden", reference="rest", method="t-test_overestim_var")
+    df = dc.tl.rankby_group(
+        adata=score, groupby="leiden", reference="rest", method="t-test_overestim_var"
+    )
     df = df[df["stat"] > 0]
-    dict_ann = df[df["stat"] > 0].groupby("group").head(1).set_index("group")["name"].to_dict()
-    rna.obs['celltype_panglao'] = rna.obs["leiden"].map(dict_ann)
+    dict_ann = (
+        df[df["stat"] > 0].groupby("group").head(1).set_index("group")["name"].to_dict()
+    )
+    rna.obs["celltype_panglao"] = rna.obs["leiden"].map(dict_ann)
 
     scfunc.celltypist_annotate_immune(rna)
 
-    fig , ax = plt.subplots(2, 2, figsize=(10,7))
-    for i, x in enumerate(zip(['leiden', 'celltype_panglao', 'maintypes_immune', 'subtypes_immune'],
-                              [True, True, True, True])):
+    fig, ax = plt.subplots(2, 2, figsize=(10, 7))
+    for i, x in enumerate(
+        zip(
+            ["leiden", "celltype_panglao", "maintypes_immune", "subtypes_immune"],
+            [True, True, True, True],
+        )
+    ):
         col, show_legend = x
-        sc.pl.umap(rna, color=col, ncols=2,
-                   legend_loc='on data' if show_legend else True, legend_fontsize=8, legend_fontoutline=2, legend_fontweight='normal',
-                   ax=ax[i//2, i%2], show=False)
+        sc.pl.umap(
+            rna,
+            color=col,
+            ncols=2,
+            legend_loc="on data" if show_legend else True,
+            legend_fontsize=8,
+            legend_fontoutline=2,
+            legend_fontweight="normal",
+            ax=ax[i // 2, i % 2],
+            show=False,
+        )
     fig.tight_layout()
-    fig.savefig(str(figs_path / 'umap_celltypes.pdf'))
+    fig.savefig(str(figs_path / "umap_celltypes.pdf"))
 
-    # Generate summary
-    metrics_img_path = figs_path / "metrics_table.png"
-    with open(metrics_img_path, 'wb') as f:
-        dfi.export(metrics_table, f)
+    # marker genes, we want the most specific one for each of T, TfH, B, GC B, Stromal, FDC
+    marker_genes = {
+        "T": {"genes": ["CD3E", "CD3D", "TRAC"]},
+        "TfH": {"genes": ["S1PR2", "CXCR5", "PDCD1"]},
+        "B": {"genes": ["MS4A1", "CD79A", "CD19"]},
+        "GC B": {"genes": ["AICDA", "S1PR2", "PCNA"]},
+        "Stromal": {"genes": ["COL1A2", "PDGFRA", "VIM"]},
+        "FDC": {"genes": ["CR2", "FDCSP", "CXCL13"]},
+    }
+    markers = scfunc.celltypemarkers.CellTypeMarkers(
+        organism=organism, data=marker_genes
+    )
+    markers.filter_genes(rna.var_names)
+    marker_genes = markers.to_dict()
 
-    gene_counts_img = figs_path / "gene_counts_per_sample.pdf"
-    umap_overview_img = figs_path / "umap_overview.pdf"
-    umap_celltypes_img = figs_path / "umap_celltypes.pdf"
+    fig, ax = plt.subplots(2, 3, figsize=(20, 7))
+    for i, k in enumerate(marker_genes.keys()):
+        a = ax.flatten()[i]
+        gene = marker_genes[k][0]
+        vmax = scfunc.get_vmax(rna, [gene], percentile=99)
+        sc.pl.umap(rna, color=gene, vmax=vmax, ax=a, show=False)
+        a.set_title(f"{k}: {gene}")
 
+    fig.tight_layout()
+    fig.savefig(figs_path / "umap_markers.pdf")
+
+    # Save metrics_table as an image
+    metrics_table_path = figs_path / "metrics_table.png"
+    with open(metrics_table_path, "wb") as f:
+        dfi.export(metrics_table, f)  # may have to watch for errors if used as a script
+
+    # Prepare file paths for images
+    pdfs = [
+        "metrics_scatter",
+        "gene_counts_per_sample",
+        "umap_overview",
+        "umap_celltypes",
+        "umap_markers",
+    ]
+    pdf_paths = {}
+    png_paths = {}
+    for pdf in pdfs:
+        pdf_paths[pdf] = figs_path / f"{pdf}.pdf"
+        png_paths[pdf] = figs_path / f"{pdf}.png"
+
+    # Convert PDFs to PNGs for FPDF (if needed)
     def pdf_to_png(pdf_path, out_path):
         images = convert_from_path(str(pdf_path), dpi=150)
-        images[0].save(out_path, 'PNG')
+        images[0].save(out_path, "PNG")
 
-    gene_counts_png = figs_path / "gene_counts_per_sample.png"
-    umap_overview_png = figs_path / "umap_overview.png"
-    umap_celltypes_png = figs_path / "umap_celltypes.png"
+    for k in pdf_paths.keys():
+        pdf_to_png(pdf_paths[k], png_paths[k])
 
-    pdf_to_png(gene_counts_img, gene_counts_png)
-    pdf_to_png(umap_overview_img, umap_overview_png)
-    pdf_to_png(umap_celltypes_img, umap_celltypes_png)
-
-    pdf = FPDF(orientation='L', unit='mm', format='A4')
+    # Create PDF report
+    pdf = FPDF(orientation="L", unit="mm", format="A4")
     pdf.add_page()
+
     page_w, page_h = pdf.w, pdf.h
     margin_x, margin_y = 1, 1
+
+    # Add title and subtitle to the PDF page
     title = file_path.name
     subtitle = str(file_path.resolve())
+
     pdf.set_font("Helvetica", "", 10)
     pdf.set_x(margin_x)
-    pdf.cell(page_w - 2 * margin_x, 2, subtitle, align="C", new_y='NEXT')
+    pdf.cell(page_w - 2 * margin_x, 2, subtitle, align="C", new_y="NEXT")
     title_h = pdf.get_y() + 2
-    panel_w, panel_h = (page_w - 2 * margin_x) / 2, (page_h - 2 * margin_y - title_h) / 2
-    pdf.image(str(metrics_img_path), x=margin_x, y=margin_y + title_h)
-    pdf.image(str(gene_counts_png), x=margin_x, y=margin_y + title_h + panel_h, w=panel_w, h=panel_h)
-    pdf.image(str(umap_overview_png), x=margin_x + panel_w, y=margin_y + title_h, w=panel_w, h=panel_h)
-    pdf.image(str(umap_celltypes_png), x=margin_x + panel_w, y=margin_y + panel_h + title_h, w=panel_w, h=panel_h)
+
+    # Panel positions and sizes
+    panel_w, panel_h = (page_w - 2 * margin_x) / 2, (
+        page_h - 2 * margin_y - title_h
+    ) / 2
+
+    pdf.image(
+        str(metrics_table_path),
+        x=margin_x,
+        y=margin_y + title_h,
+        w=panel_w,
+        h=panel_h / 2,
+        keep_aspect_ratio=True,
+    )
+    pdf.image(
+        str(png_paths["metrics_scatter"]),
+        x=margin_x,
+        y=margin_y + title_h + panel_h / 2,
+        w=panel_w / 2,
+        h=panel_h / 2,
+        keep_aspect_ratio=True,
+    )
+
+    pdf.image(
+        str(png_paths["gene_counts_per_sample"]),
+        x=margin_x,
+        y=margin_y + title_h + panel_h,
+        w=panel_w,
+        h=panel_h,
+    )
+    pdf.image(
+        str(png_paths["umap_overview"]),
+        x=margin_x + panel_w,
+        y=margin_y + title_h,
+        w=panel_w,
+        h=panel_h,
+    )
+    pdf.image(
+        str(png_paths["umap_celltypes"]),
+        x=margin_x + panel_w,
+        y=margin_y + panel_h + title_h,
+        w=panel_w,
+        h=panel_h,
+    )
+
+    # second page with more specific stuff
+    pdf.add_page()
+    pdf.image(
+        str(png_paths["umap_markers"]), x=margin_x, y=margin_y, w=panel_w * 2, h=panel_h
+    )
+
     report_path = figs_path / "firstlook_report.pdf"
     pdf.output(str(report_path))
     print(f"Report saved to {report_path}")
