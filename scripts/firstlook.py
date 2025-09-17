@@ -407,7 +407,7 @@ def main():
     with open(metrics_table_path, "wb") as f:
         try:
             dfi.export(metrics_table, f)
-        except Error:
+        except:
             dfi.export(metrics_table, f, table_conversion="matplotlib")
 
     # Prepare file paths for images
