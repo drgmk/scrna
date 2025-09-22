@@ -9,6 +9,7 @@ import decoupler as dc
 import seaborn as sns
 import matplotlib.pyplot as plt
 import scrna_functions as scfunc
+import sklearn.metrics
 import argparse
 
 from fpdf import FPDF
@@ -305,6 +306,24 @@ def main():
     sc.tl.umap(rna, random_state=42)
     sc.tl.leiden(rna, resolution=leiden_res)
 
+    # Batch correction metric
+    batch_s_original = []
+    batch_s_corrected = []
+    for s in sample_order:
+        tmp = rna[rna.obs[sample_col] == s].copy()
+        scores = 1 - sklearn.metrics.silhouette_samples(
+            tmp.obsm["X_pca"], tmp.obs["leiden"]
+        )
+        batch_s_original.append(scores.sum() / len(scores))
+        scores = 1 - sklearn.metrics.silhouette_samples(
+            tmp.obsm["X_pca_harmony"], tmp.obs["leiden"]
+        )
+        batch_s_corrected.append(scores.sum() / len(scores))
+
+    asw_original = np.mean(batch_s_original)
+    asw_corrected = np.mean(batch_s_corrected)
+    print(f"ASW original: {asw_original:.4f}, ASW corrected: {asw_corrected:.4f}")
+
     # fix this (again)
     rna.obs["samp_no"] = pd.Categorical(rna.obs["samp_no"])
 
@@ -322,6 +341,10 @@ def main():
         sc.pl.umap(
             rna, color=col, vmin=vmin, vmax=vmax, ax=ax[i // 2, i % 2], show=False
         )
+        if i == 0:
+            ax[i // 2, i % 2].set_title(
+                f"samp_no (batch ASW {asw_original:.3f} -> {asw_corrected:.3f})"
+            )
     fig.tight_layout()
     fig.savefig(str(figs_path / "umap_overview.pdf"))
 
