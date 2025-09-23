@@ -197,9 +197,11 @@ class Backend:
 
     def __getattr__(self, name: str):
         # Provide scanpy‑like top‑level API: read_h5ad, read, settings, etc.
-        # pp/tl/pl are handled via explicit attributes above.
-        lib = self._lib()
-        return getattr(lib, name)
+        # pp/tl/pl/external are handled via explicit attributes above.
+        # If using rsc and attribute exists, use it; otherwise always fallback to scanpy
+        if self._using_rsc and hasattr(self._rsc, name):
+            return getattr(self._rsc, name)
+        return getattr(self._sc, name)
 
 
 def pick_backend(
