@@ -9,13 +9,16 @@ import pandas as pd
 import scipy.sparse
 import seaborn as sns
 import anndata as ad
-import scanpy as sc
 import decoupler as dc
 from pydeseq2.dds import DeseqDataSet, DefaultInference
 from pydeseq2.ds import DeseqStats
 from cellphonedb.src.core.methods import cpdb_statistical_analysis_method
 import celltypist
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+from .scanpy_gpu_helper import pick_backend
+
+sc = pick_backend()
 
 
 def plot_nxy(n):

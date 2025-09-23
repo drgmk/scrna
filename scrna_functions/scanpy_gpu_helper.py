@@ -15,6 +15,9 @@ Two ways to use it
     sc.pp.neighbors(adata, n_neighbors=15)
     sc.tl.umap(adata)
     sc.tl.leiden(adata, resolution=1.0)
+    # free up GPU memory
+    sc.to_cpu(adata)
+    gc.collect()
 
    Most existing Scanpy code should work unchanged after replacing
    `import scanpy as sc` with `sc = pick_backend()`.
@@ -35,7 +38,9 @@ Environment knobs
 Notes
 -----
 - If a GPU exists but `rapids-singlecell`/`rsc` is not importable, a warning is emitted.
-- When the GPU path is active, wrappers will move the passed `AnnData` to GPU *before* calling the underlying function. They do **not** automatically move it back; use `gpu_session(..., leave_on_gpu=False)` to return to CPU at block exit.
+- When the GPU path is active, wrappers will move the passed `AnnData` to GPU *before*
+ calling the underlying function. They do **not** automatically move it back; call
+ `sc.to_cpu(adata)` or use `gpu_session(..., leave_on_gpu=False)` to return to CPU at block exit.
 """
 
 from __future__ import annotations
@@ -169,10 +174,7 @@ class Backend:
         try:
             import rapids_singlecell as rsc  # preferred
         except Exception:
-            try:
-                import rsc  # legacy alias
-            except Exception:
-                return
+            return
         self._rsc = rsc
         self._using_rsc = True
         self.is_gpu = True

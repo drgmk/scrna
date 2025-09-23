@@ -1,4 +1,13 @@
-# First look; see notebook version for more comments
+"""
+First look; see notebook version for more comments.
+
+```shell
+scrna_firstlook -f path/to/data.h5ad --figs-path path/to/figures_output
+```
+
+todo: think about whether VDJ and other sequencing output can/should
+ be included.
+"""
 
 import os
 from pathlib import Path
@@ -18,7 +27,9 @@ from fpdf import FPDF
 import dataframe_image as dfi
 
 # auto CPU/GPU
-sc = scfunc.scanpy_gpu_helper.pick_backend()
+from .scanpy_gpu_helper import pick_backend
+
+sc = pick_backend()
 
 
 def main():
