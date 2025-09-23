@@ -183,14 +183,14 @@ class Backend:
             fn = getattr(self._rsc.get, "anndata_to_GPU", None)
             if callable(fn):
                 return fn(adata)
-        return adata
+        return None
 
     def to_cpu(self, adata: Any) -> Any:
         if self._using_rsc and hasattr(self._rsc, "get"):
             fn = getattr(self._rsc.get, "anndata_to_CPU", None)
             if callable(fn):
                 return fn(adata)
-        return adata
+        return None
 
     # ---------- module forwarding ----------
     def _lib(self):

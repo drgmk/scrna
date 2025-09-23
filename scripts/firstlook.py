@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import scrna_functions as scfunc
 import sklearn.metrics
 import argparse
+import gc
 
 from fpdf import FPDF
 from pdf2image import convert_from_path
@@ -307,6 +308,8 @@ def main():
     sc.pp.neighbors(rna, n_neighbors=n_neighbours, use_rep="X_pca_harmony")
     sc.tl.umap(rna, random_state=42)
     sc.tl.leiden(rna, resolution=leiden_res)
+    sc.to_cpu(rna)
+    gc.collect()
 
     # Batch correction metric
     batch_s_original = []
@@ -368,7 +371,13 @@ def main():
         }
     )
     markers = markers[["source", "target", "weight"]]
-    dc.mt.ulm(rna, markers, verbose=False)
+    if sc._using_rsc:
+        sc.to_gpu(rna)
+        sc._rsc.dcg.ulm(rna, markers, verbose=False)
+        sc.to_cpu(rna)
+    else:
+        dc.mt.ulm(rna, markers, verbose=False)
+
     score = dc.pp.get_obsm(rna, key="score_ulm")
     df = dc.tl.rankby_group(
         adata=score, groupby="leiden", reference="rest", method="t-test_overestim_var"
