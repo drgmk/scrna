@@ -149,7 +149,8 @@ class Backend:
         # Namespaces that mimic scanpy API
         self.pp = _Namespace(self, "pp", move_to_gpu=True)
         self.tl = _Namespace(self, "tl", move_to_gpu=True)
-        self.pl = _Namespace(self, "pl", move_to_gpu=False)
+        # Always use scanpy for .pl, doesn't exist in rsc
+        self.pl = self._sc.pl
         # external.pp maps to rsc.pp on GPU; passthrough on CPU
         self.external = _ExternalFacade(self)
 
