@@ -311,12 +311,14 @@ def main():
     batch_s_corrected = []
     for s in sample_order:
         tmp = rna[rna.obs[sample_col] == s].copy()
-        scores = 1 - sklearn.metrics.silhouette_samples(
-            tmp.obsm["X_pca"], tmp.obs["leiden"]
+        scores = 1 - np.abs(
+            sklearn.metrics.silhouette_samples(tmp.obsm["X_pca"], tmp.obs["leiden"])
         )
         batch_s_original.append(scores.sum() / len(scores))
-        scores = 1 - sklearn.metrics.silhouette_samples(
-            tmp.obsm["X_pca_harmony"], tmp.obs["leiden"]
+        scores = 1 - np.abs(
+            sklearn.metrics.silhouette_samples(
+                tmp.obsm["X_pca_harmony"], tmp.obs["leiden"]
+            )
         )
         batch_s_corrected.append(scores.sum() / len(scores))
 
