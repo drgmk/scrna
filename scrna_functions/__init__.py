@@ -6,6 +6,7 @@ of single-cell RNA sequencing data.
 """
 
 from .core import *
+from .scanpy_gpu_helper import pick_backend, gpu_session
 from .celltypemarkers import CellTypeMarkers
 
 __version__ = "0.1.0"

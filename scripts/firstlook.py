@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 import numpy as np
 import pandas as pd
-import scanpy as sc
 import decoupler as dc
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -16,6 +15,9 @@ from fpdf import FPDF
 from pdf2image import convert_from_path
 from fpdf import FPDF
 import dataframe_image as dfi
+
+# auto CPU/GPU
+sc = scfunc.scanpy_gpu_helper.pick_backend()
 
 
 def main():
