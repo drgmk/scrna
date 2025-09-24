@@ -1,7 +1,6 @@
 import os
 import shutil
 from pathlib import Path
-from xml.parsers.expat import model
 import numpy as np
 import scipy.stats
 import matplotlib.pyplot as plt
@@ -14,11 +13,15 @@ from pydeseq2.dds import DeseqDataSet, DefaultInference
 from pydeseq2.ds import DeseqStats
 from cellphonedb.src.core.methods import cpdb_statistical_analysis_method
 import celltypist
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from .scanpy_gpu_helper import pick_backend
+# from mpl_toolkits.axes_grid1 import make_axes_locatable
+# from xml.parsers.expat import model
 
-sc = pick_backend()
+# no particularly heavy processing here, so no real need
+# to try to use the GPU, even if available
+# from .scanpy_gpu_helper import pick_backend
+# sc = pick_backend()
+import scanpy as sc
 
 
 def plot_nxy(n):
