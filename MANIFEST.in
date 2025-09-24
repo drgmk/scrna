@@ -1,8 +1,7 @@
 include README.md
 include LICENSE
 include pyproject.toml
-recursive-include scrna_functions *.py
-recursive-include scrna_functions *.json
-recursive-include scrna_functions *.txt
+recursive-include src/scrna *
+recursive-include data *
 global-exclude __pycache__
 global-exclude *.py[co]
