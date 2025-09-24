@@ -50,6 +50,35 @@ from hgtc_toolkit.src.datascience.orchestration.BaseClasses import (
 from . import core as scfunc
 
 
+class _core_abstraction_demo(BaseOperation):
+    class _example_method(BaseMethod):
+        parameters ={
+            # Parameter Derivatives Config still required here
+            # When passing through GUI, parameters is a CONFIG used
+            #   to generate a dictionary ~ {parameters[k]:parameters[k].default() for k in parameters}
+            #   thus, the variable names used in core need to correspond to parameter.keys() in order
+            #   for them below main() construction to work with **pars.
+            #   Assumes that core._example_method accepts a parameters as an arguments:
+            #   eg. core._egMethod(rna, mtPctLim = 20, minTotalCounts = 1e2,)
+        }
+        @classmethod
+        def parameterDerivatives(cls, CONFIG, UID, **kwargs) -> Any:
+            # Call the parent method to get the base functionality
+            CONFIG, pars = super().parameterDerivatives(CONFIG, UID, **kwargs)
+            # Parameter Derivatives optional.
+            # Could be done via:
+            import core
+            pars = core._example_method_PARAMETER_OPERATIONS(pars)
+            return CONFIG, pars
+        
+        @classmethod
+        def main(cls, adata: Any, pars: Dict[str, Any], **kwargs) -> Any:
+            import core
+            adata, rtnComment = core._example_method(rna=adata, **pars)
+            return {'adata':adata, 'comments':rtnComment}
+
+
+
 class inspect(BaseOperation):
     class metrics(BaseMethod):
         pars = {
