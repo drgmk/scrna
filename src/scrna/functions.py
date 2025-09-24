@@ -670,7 +670,7 @@ def get_cell_cycle_genes(organism, gene_list=None):
     # Get the directory where this module is located
     module_dir = os.path.dirname(os.path.abspath(__file__))
     tirosh_file_path = os.path.join(
-        module_dir, "../../data/tirosh15_regev_lab_cell_cycle_genes.txt"
+        module_dir, "data/tirosh15_regev_lab_cell_cycle_genes.txt"
     )
 
     try:

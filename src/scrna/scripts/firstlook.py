@@ -5,6 +5,8 @@ First look; see notebook version for more comments.
 scrna_firstlook -f path/to/data.h5ad --figs-path path/to/figures_output
 ```
 
+todo: figs_path is probably better as relative to data file
+
 todo: think about whether VDJ and other sequencing output can/should
  be included.
 """
