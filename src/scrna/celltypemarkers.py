@@ -45,7 +45,7 @@ class CellTypeMarkers:
     def _load_default_markers(self) -> Dict:
         """Load default marker genes from the package JSON file."""
         module_dir = os.path.dirname(os.path.abspath(__file__))
-        marker_genes_path = os.path.join(module_dir, "marker_genes.json")
+        marker_genes_path = os.path.join(module_dir, "../../data/marker_genes.json")
 
         try:
             with open(marker_genes_path, "r") as f:

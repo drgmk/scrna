@@ -40,14 +40,23 @@ import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, Union, List, Tuple
 
-# from hgtc_toolkit.src.datascience.tools_mixtureModels import mixture_models as mix
-from hgtc_toolkit.src.datascience.orchestration.BaseClasses import (
-    BaseMethod,
-    BaseOperation,
-)
-
 # from hgtc_toolkit.src.scrna.scrna_functions import core as scfunc
-from . import core as scfunc
+from . import functions as scfunc
+
+# from hgtc_toolkit.src.datascience.tools_mixtureModels import mixture_models as mix
+# from hgtc_toolkit.src.datascience.orchestration.BaseClasses import (
+# BaseMethod,
+# BaseOperation,
+# )
+
+
+# placeholders until I can import hgtc_toolkit
+class BaseOperation(ABC):
+    pass
+
+
+class BaseMethod(ABC):
+    pass
 
 
 class inspect(BaseOperation):

@@ -5,10 +5,10 @@ This package provides functions for quality control, normalization, and visualiz
 of single-cell RNA sequencing data.
 """
 
-from .core import *
-from .scanpy_gpu_helper import pick_backend, gpu_session
-from .celltypemarkers import CellTypeMarkers
-from .hgtc_classes import *
+from . import functions
+from . import scanpy_gpu_helper
+from . import celltypemarkers
+from . import hgtc_classes
 
 __version__ = "0.1.0"
-__author__ = "Your Name"
+__author__ = "drgmk"

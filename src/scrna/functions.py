@@ -282,7 +282,7 @@ def plot_gene_counts(
     # cax = divider.append_axes("right", size="5%", pad=0.05)
     fig.tight_layout()
     fig.subplots_adjust(right=0.88)
-    cbar_ax = fig.add_axes([0.9, 0.15, 0.02, 0.7])
+    cbar_ax = fig.add_axes((0.9, 0.15, 0.02, 0.7))
     cb = fig.colorbar(_, cax=cbar_ax, aspect=30)
     cb.set_label(colour_by)
     # turn grid on for all axes
@@ -667,7 +667,7 @@ def get_cell_cycle_genes(organism, gene_list=None):
     # Get the directory where this module is located
     module_dir = os.path.dirname(os.path.abspath(__file__))
     tirosh_file_path = os.path.join(
-        module_dir, "tirosh15_regev_lab_cell_cycle_genes.txt"
+        module_dir, "../../data/tirosh15_regev_lab_cell_cycle_genes.txt"
     )
 
     try:

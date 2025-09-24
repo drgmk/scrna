@@ -16,7 +16,7 @@ import pandas as pd
 import decoupler as dc
 import seaborn as sns
 import matplotlib.pyplot as plt
-import scrna_functions as scfunc
+import scrna.functions as scfunc
 import sklearn.metrics
 import argparse
 import gc
@@ -26,10 +26,10 @@ from pdf2image import convert_from_path
 from fpdf import FPDF
 import dataframe_image as dfi
 
-# auto CPU/GPU
-from .scanpy_gpu_helper import pick_backend
+import scrna
+import scrna.functions as scfunc
 
-sc = pick_backend()
+sc = scrna.scanpy_gpu_helper.pick_backend()
 
 
 def main():
@@ -432,7 +432,7 @@ def main():
         "Stromal": {"genes": ["COL1A2", "PDGFRA", "VIM"]},
         "FDC": {"genes": ["CR2", "FDCSP", "CXCL13"]},
     }
-    markers = scfunc.celltypemarkers.CellTypeMarkers(
+    markers = scrna.celltypemarkers.CellTypeMarkers(
         organism=organism, data=marker_genes
     )
     markers.filter_genes(rna.var_names)
