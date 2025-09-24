@@ -9,6 +9,7 @@ from . import functions
 from . import scanpy_gpu_helper
 from . import celltypemarkers
 from . import hgtc_classes
+from . import scripts
 
 __version__ = "0.1.0"
 __author__ = "drgmk"
