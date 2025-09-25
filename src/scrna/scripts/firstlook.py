@@ -178,12 +178,12 @@ def main():
     print(f"reading: {file_path}")
     print(rna)
 
-    # todo: check if there is also VDJ or other data
-
     if use_raw:
         rna.X = rna.raw.X
-    else:
-        rna.raw = rna.copy()
+
+    # discard any other layers and raw to save memory
+    rna.layers = None
+    rna.raw = None
 
     # sample details
     if "sample_order" in rna.uns:

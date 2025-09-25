@@ -245,24 +245,33 @@ def plot_gene_counts(
     nx, ny = plot_nxy(len(order))
     fig, ax = plt.subplots(ny, nx, sharey=True, sharex=True, figsize=(10, 7))
 
+    # check on size_by, and rescale between 1 and 5
+    sizes = adata.obs[size_by] / 4
+    if sizes.min() == sizes.max():
+        sizes = 2 * np.ones(adata.shape[0])
+    else:
+        sizes = 1 + 4 * (sizes - sizes.min()) / (sizes.max() - sizes.min())
+
     for i, s in enumerate(order):
         a = ax.flatten()[i]
-        tmp = adata[(adata.obs[hue] == s) & mask, :]
+        ok = (adata.obs[hue] == s) & mask
+        tmp = adata[ok, :]
         _ = a.scatter(
             tmp.obs["total_counts"],
             tmp.obs["n_genes_by_counts"],
-            s=tmp.obs[size_by] / 4,
+            s=sizes[ok],
             c=tmp.obs[colour_by],
             vmin=0,
             vmax=vmax,
             cmap="viridis",
         )
         if show_masked:
-            tmp = adata[(adata.obs[hue] == s) & np.invert(mask), :]
+            ok = (adata.obs[hue] == s) & np.invert(mask)
+            tmp = adata[ok, :]
             a.scatter(
                 tmp.obs["total_counts"],
                 tmp.obs["n_genes_by_counts"],
-                s=tmp.obs[size_by] / 4,
+                s=sizes[ok],
                 c="lightgrey",
                 alpha=0.5,
                 zorder=-1,
