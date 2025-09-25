@@ -1,14 +1,34 @@
 """
-First look; see notebook version for more comments.
+First look.
+
+Aim is to use scrna-functions to make a first pass and give an idea
+of data quality and content.
 
 ```shell
-scrna_firstlook -f path/to/data.h5ad --figs-path path/to/figures_output
+scrna_firstlook -f path/to/data.h5ad
 ```
 
-todo: figs_path is probably better as relative to data file
+There are some assumptions:
+
+- that there has been a little bit of organising already,
+  i.e. combining data into one h5ad file with sample and perhaps groups
+  columns in `adata.obs`.
+
+- if there is a helpful order for samples, these will be listed in
+  `adata.uns['sample_order']`.
+
+- that any metrics metadata, e.g. from cellranger, will have been saved as
+  dataframes, with a per-sample dictionary in `adata.uns['metrics_summary']`.
+
+The results can be saved in another h5ad file if required. Most results
+will have been saved in `adata.obs`, `adata.obsm`, or `adata.uns`.
+
+todo: downsampling for plots
 
 todo: think about whether VDJ and other sequencing output can/should
  be included.
+
+todo: simple differential expression between groups if group_col given.
 """
 
 import os
@@ -36,7 +56,6 @@ sc = scrna.scanpy_gpu_helper.pick_backend()
 
 def main():
     # Default values for CLI
-    figs_path = "./figures/firstlook/"
     sample_col = "sample"
     group_col = ""
     use_raw = False
@@ -57,9 +76,8 @@ def main():
     parser.add_argument(
         "--figs_path",
         type=str,
-        default=figs_path,
-        metavar=figs_path,
-        help="Path to save figures",
+        metavar="path/datafile/datafile_firstlook",
+        help="Path relative to the input file to save output figures",
     )
     parser.add_argument(
         "--sample_col",
@@ -127,11 +145,17 @@ def main():
         metavar=str(leiden_res),
         help="Leiden clustering resolution",
     )
+    parser.add_argument(
+        "--save", "-s", action="store_true", help="Save the processed AnnData object"
+    )
 
     args = parser.parse_args()
 
     file_path = Path(args.file_path)
-    figs_path = Path(args.figs_path)
+    if args.figs_path:
+        figs_path = file_path.parent / args.figs_path
+    else:
+        figs_path = file_path.parent / f"{file_path.stem}_firstlook"
     sample_col = args.sample_col
     group_col = args.group_col
     use_raw = args.use_raw
@@ -142,6 +166,7 @@ def main():
     pct_outlier_cutoff = args.pct_outlier_cutoff
     n_neighbours = args.n_neighbours
     leiden_res = args.leiden_res
+    save = args.save
 
     # Setup
     os.makedirs(figs_path, exist_ok=True)
@@ -279,6 +304,9 @@ def main():
     fig.tight_layout()
     fig.savefig(str(figs_path / "metrics_scatter.pdf"))
 
+    # keep metrics table
+    rna.uns["meta_metrics_table"] = metrics_table
+
     # Quality control
     scfunc.filter_cells_genes(rna)
     scfunc.compute_qc_metrics(rna)
@@ -321,6 +349,8 @@ def main():
     sc.pp.neighbors(rna, n_neighbors=n_neighbours, use_rep="X_pca_harmony")
     sc.tl.umap(rna, random_state=42)
     sc.tl.leiden(rna, resolution=leiden_res)
+
+    # the expensive processing is largely done, free up GPU memory
     sc.to_cpu(rna)
     gc.collect()
 
@@ -450,6 +480,9 @@ def main():
 
     fig.tight_layout()
     fig.savefig(figs_path / "umap_markers.pdf")
+
+    if save:
+        rna.write_h5ad(figs_path / f"{file_path.stem}_firstlook.h5ad")
 
     # Save metrics_table as an image
     metrics_table_path = figs_path / "metrics_table.png"

@@ -962,17 +962,28 @@ def celltypist_annotate_immune(adata, recluster=False):
         rna_tmp, model=models[1], majority_voting=True
     )
     rna_tmp = predictions_maintypes.to_adata(prefix="maintypes_")
+    rna_tmp.obs = rna_tmp.obs[
+        [col for col in rna_tmp.obs.columns if col.startswith("maintypes_")]
+    ]
+    adata.obsm["celltypist_maintypes"] = rna_tmp.obs.copy()
+    adata.obs["maintypes_immune"] = rna_tmp.obs["maintypes_majority_voting"]
+
     predictions_subtypes = celltypist.annotate(
         rna_tmp, model=models[0], majority_voting=True
     )
     rna_tmp = predictions_subtypes.to_adata(prefix="subtypes_")
+    rna_tmp.obs = rna_tmp.obs[
+        [col for col in rna_tmp.obs.columns if col.startswith("subtypes_")]
+    ]
+    adata.obsm["celltypist_subtypes"] = rna_tmp.obs.copy()
+    adata.obs["subtypes_immune"] = rna_tmp.obs["subtypes_majority_voting"]
 
-    for col in rna_tmp.obs.columns:
-        if col.startswith("subtypes_") or col.startswith("maintypes_"):
-            adata.obs[col] = rna_tmp.obs[col].copy()
-            adata.obs.rename(
-                columns={col: col.replace("majority_voting", "immune")}, inplace=True
-            )
+    # for col in rna_tmp.obs.columns:
+    #     if col.startswith("subtypes_") or col.startswith("maintypes_"):
+    #         adata.obs[col] = rna_tmp.obs[col].copy()
+    #         adata.obs.rename(
+    #             columns={col: col.replace("majority_voting", "immune")}, inplace=True
+    #         )
 
 
 def cellphonedb_prepare(

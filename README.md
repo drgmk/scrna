@@ -50,7 +50,3 @@ sc = sf.pick_backend()
 adata = sc.read_h5ad('your_data.h5ad')
 sc.pp.normalize_total(adata)
 ```
-
-## License
-
-MIT License
