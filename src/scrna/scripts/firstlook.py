@@ -28,6 +28,9 @@ todo: downsampling for plots
 todo: think about whether VDJ and other sequencing output can/should
  be included.
 
+todo: can probably save more memory by only keeping highly variable genes
+ after normalisation. but need to restore afterwards.
+
 todo: simple differential expression between groups if group_col given.
 """
 
@@ -181,9 +184,12 @@ def main():
     if use_raw:
         rna.X = rna.raw.X
 
-    # discard any other layers and raw to save memory
+    # cut down the object to save memory
     rna.layers = None
     rna.raw = None
+    rna.obsm = None
+    rna.varm = None
+    rna.X = rna.X.astype(np.float32)
 
     # sample details
     if "sample_order" in rna.uns:
@@ -308,7 +314,8 @@ def main():
     rna.uns["meta_metrics_table"] = metrics_table
 
     # Quality control
-    scfunc.filter_cells_genes(rna)
+    mask_cells, _ = sc.pp.filter_cells(rna, min_genes=min_genes, inplace=False)
+    mask_genes, _ = sc.pp.filter_genes(rna, min_cells=min_cells, inplace=False)
     scfunc.compute_qc_metrics(rna)
 
     mask = scfunc.trim_outliers(
@@ -318,6 +325,7 @@ def main():
             "pct_counts_mt": [max_mt_pct, "max"],
             "pct_counts_in_top_1_genes": [max_top1_pct, "max"],
         },
+        extra_mask_boolean=mask_cells,
         pct=pct_outlier_cutoff,
     )
 
@@ -326,8 +334,10 @@ def main():
     )
     fig.savefig(str(figs_path / "gene_counts_per_sample.pdf"))
 
-    # apply mask
-    rna = rna[mask, :].copy()
+    # save and apply mask
+    rna.uns["meta_qc_mask_cells"] = mask
+    rna.uns["meta_qc_mask_genes"] = mask_genes
+    rna = rna[mask, mask_genes].copy()
 
     # Doublets
     sc.pp.scrublet(rna, batch_key=sample_col)
@@ -481,7 +491,17 @@ def main():
     fig.tight_layout()
     fig.savefig(figs_path / "umap_markers.pdf")
 
+    # save the processed object
     if save:
+        # apply mask to original obsm and varm
+        rna_orig = sc.read_h5ad(file_path)
+        rna_orig.var_names_make_unique()
+        rna_orig.obs_names_make_unique()
+        for k in rna_orig.obsm.keys():
+            rna.obsm[f"{k}_original"] = rna_orig.obsm[k][mask]
+        for k in rna_orig.varm.keys():
+            rna.varm[f"{k}_original"] = rna_orig.varm[k][mask_genes]
+
         rna.write_h5ad(figs_path / f"{file_path.stem}_firstlook.h5ad")
 
     # Save metrics_table as an image

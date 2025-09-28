@@ -139,9 +139,14 @@ def filter_cells_genes(adata, min_genes=200, min_cells=3):
     min_cells : int, optional
         Minimum number of cells a gene must be expressed in to be kept.
     """
-    sc.pp.filter_cells(adata, min_genes=min_genes)
-    sc.pp.filter_genes(adata, min_cells=min_cells)
-    adata.uns["filter_cells_genes"] = {"min_genes": min_genes, "min_cells": min_cells}
+    mask1, _ = sc.pp.filter_cells(adata, min_genes=min_genes, inplace=False)
+    mask2, _ = sc.pp.filter_genes(adata, min_cells=min_cells, inplace=False)
+    adata = adata[mask1 or mask2, :]
+    adata.uns["meta_filter_cells_genes"] = {
+        "min_genes": min_genes,
+        "min_cells": min_cells,
+    }
+    return mask1 or mask2
 
 
 def trim_outliers(
@@ -150,6 +155,7 @@ def trim_outliers(
     y="n_genes_by_counts",
     groupby=None,
     extra_mask=None,
+    extra_mask_boolean=None,
     pct=100.0,
 ):
     """Function to fit a line in log space, trim outliers, and return boolean mask.
@@ -165,6 +171,8 @@ def trim_outliers(
     extra_mask : dict, optional
         Dictionary specifying additional masks to apply before trimming outliers.
         Format is {column_name: (threshold, 'min' or 'max')}.
+    extra_mask_boolean : array-like, optional
+        Boolean mask to apply before trimming outliers.
     pct : int, optional
         Percentile to use for trimming outliers, default is 100 (no trimming).
     """
@@ -194,6 +202,9 @@ def trim_outliers(
                 raise ValueError(
                     f'unknown key {k} in extra_mask, must contain "min" or "max"'
                 )
+
+    if extra_mask_boolean is not None:
+        extra_mask_ = np.logical_and(extra_mask_, extra_mask_boolean)
 
     x_ = np.log10(adata.obs[x])
     y_ = np.log10(adata.obs[y])
