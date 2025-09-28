@@ -38,6 +38,7 @@ import os
 from pathlib import Path
 import numpy as np
 import pandas as pd
+import scanpy
 import decoupler as dc
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -185,11 +186,13 @@ def main():
         rna.X = rna.raw.X
 
     # cut down the object to save memory
+    print(f"memory in original adata: {rna.__sizeof__() / 1e6} MB")
     rna.layers = None
     rna.raw = None
     rna.obsm = None
     rna.varm = None
     rna.X = rna.X.astype(np.float32)
+    print(f"memory in smaller adata: {rna.__sizeof__() / 1e6} MB")
 
     # sample details
     if "sample_order" in rna.uns:
@@ -314,8 +317,8 @@ def main():
     rna.uns["meta_metrics_table"] = metrics_table
 
     # Quality control
-    mask_cells, _ = sc.pp.filter_cells(rna, min_genes=min_genes, inplace=False)
-    mask_genes, _ = sc.pp.filter_genes(rna, min_cells=min_cells, inplace=False)
+    mask_cells, _ = scanpy.pp.filter_cells(rna, min_genes=min_genes, inplace=False)
+    mask_genes, _ = scanpy.pp.filter_genes(rna, min_cells=min_cells, inplace=False)
     scfunc.compute_qc_metrics(rna)
 
     mask = scfunc.trim_outliers(
