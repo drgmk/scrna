@@ -61,7 +61,7 @@ sc = scrna.scanpy_gpu_helper.pick_backend()
 def main():
     # Default values for CLI
     sample_col = "sample"
-    group_col = ""
+    group_col = "group"
     use_raw = False
     max_mt_pct = 20.0
     max_top1_pct = 15.0
