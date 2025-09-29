@@ -186,13 +186,13 @@ def main():
         rna.X = rna.raw.X
 
     # cut down the object to save memory
-    print(f"memory in original adata: {rna.__sizeof__() / 1e6} MB")
+    print(f"memory in original adata: {rna.__sizeof__() // 1_000_000} MB")
     rna.layers = None
     rna.raw = None
     rna.obsm = None
     rna.varm = None
     rna.X = rna.X.astype(np.float32)
-    print(f"memory in smaller adata: {rna.__sizeof__() / 1e6} MB")
+    print(f"             cut down to: {rna.__sizeof__() // 1_000_000} MB")
 
     # sample details
     if "sample_order" in rna.uns:
@@ -248,7 +248,6 @@ def main():
 
         keep_cols = [
             "sample",
-            group_col,
             "Estimated Number of Cells",
             "Mean Reads per Cell",
             "Median Genes per Cell",
@@ -257,8 +256,10 @@ def main():
             "Reads Mapped Confidently to Genome",
             "Sequencing Saturation",
         ]
+        if group_col != "":
+            keep_cols = keep_cols + [group_col]
 
-        metrics_table = metrics[keep_cols]
+        metrics_table = metrics[keep_cols].copy()
 
         # diagnostic plot for outliers
         fig, ax = plt.subplots(figsize=(7, 5))
@@ -268,7 +269,7 @@ def main():
             y="Mean Reads per Cell",
             size="Median Genes per Cell",
             hue=metrics_table.index,
-            style=group_col,
+            style=group_col if group_col != "" else None,
             legend=True,
             ax=ax,
         )
