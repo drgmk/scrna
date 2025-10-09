@@ -34,7 +34,10 @@ dependencies = [
     "cellphonedb",
     "celltypist",
     "decoupler",
-    "pydeseq2"
+    "pydeseq2",
+    "pdf2image",
+    "dataframe-image",
+    "harmonypy",
 ]
 
 [project.optional-dependencies]
