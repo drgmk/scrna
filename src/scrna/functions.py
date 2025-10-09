@@ -766,6 +766,51 @@ def remove_doublet_clusters(adata, groupby="leiden"):
     return adata[~adata.obs[groupby].isin(remove)]
 
 
+def get_highest_expr_cluster(adata, gene, groupby="leiden"):
+    """Return cluster with highest gene expression
+
+    Parameters
+    ----------
+    adata : AnnData
+        The RNA data.
+    gene : str
+        The gene to check.
+    groupby : str, optional
+        The column in `adata.obs` to use for grouping (default is 'leiden').
+    """
+    expr = []
+    emax = 0
+    highest_cluster = ""
+    for l in adata.obs[groupby].unique():
+        tmp = adata[adata.obs[groupby] == l].copy()
+        eavg = np.mean(tmp[:, gene].X)
+        expr.append(eavg)
+        # print(l, eavg)
+        if eavg > emax:
+            emax = eavg
+            highest_cluster = l
+
+    # test whether highest is significantly higher than rest
+    expr = np.array(expr)
+    expr = expr[expr < emax]
+    if len(expr) < 2:
+        print("WARNING: only one cluster")
+        return highest_cluster
+
+    # Perform statistical test (e.g., t-test) to compare means
+    res = scipy.stats.ttest_1samp(expr, emax)
+    if res.pvalue > 0.05:
+        print(
+            f"WARNING: highest cluster {highest_cluster} not significantly higher than rest (p={res.pvalue:.3f})"
+        )
+    else:
+        print(
+            f"Highest cluster {highest_cluster} significantly higher than rest (p={res.pvalue:.3f})"
+        )
+
+    return highest_cluster
+
+
 def get_vmax(adata, markers, percentile=95, min_vmax=0.1):
     """Get vmax values for a list of marker genes.
 

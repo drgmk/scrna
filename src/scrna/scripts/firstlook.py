@@ -495,12 +495,14 @@ def main():
     fig.tight_layout()
     fig.savefig(figs_path / "umap_markers.pdf")
 
-    # save the processed object
+    # save the processed object, restoring some of the original data
     if save:
-        # apply mask to original obsm and varm
         rna_orig = sc.read_h5ad(file_path)
         rna_orig.var_names_make_unique()
         rna_orig.obs_names_make_unique()
+        # original counts
+        rna.layers["counts"] = rna_orig.X[mask, mask_genes]
+        # apply mask to original obsm and varm
         for k in rna_orig.obsm.keys():
             rna.obsm[f"{k}_original"] = rna_orig.obsm[k][mask]
         for k in rna_orig.varm.keys():
