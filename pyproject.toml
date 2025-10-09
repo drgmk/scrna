@@ -35,6 +35,7 @@ dependencies = [
     "celltypist",
     "decoupler",
     "pydeseq2",
+    "fpdf2",
     "pdf2image",
     "dataframe-image",
     "harmonypy",
