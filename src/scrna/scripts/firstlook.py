@@ -70,6 +70,7 @@ def main():
     pct_outlier_cutoff = 99.0
     n_neighbours = 20
     leiden_res = 0.8
+    min_umap_dist = 0.5
 
     parser = argparse.ArgumentParser(
         description="First look at single-cell RNA-seq data"
@@ -143,6 +144,13 @@ def main():
         help="Number of neighbours for clustering",
     )
     parser.add_argument(
+        "--min_umap_dist",
+        type=float,
+        default=min_umap_dist,
+        metavar=str(min_umap_dist),
+        help="Minimum UMAP distance",
+    )
+    parser.add_argument(
         "--leiden_res",
         type=float,
         default=leiden_res,
@@ -170,6 +178,7 @@ def main():
     pct_outlier_cutoff = args.pct_outlier_cutoff
     n_neighbours = args.n_neighbours
     leiden_res = args.leiden_res
+    min_umap_dist = args.min_umap_dist
     save = args.save
 
     # Setup
@@ -364,7 +373,7 @@ def main():
     sc.tl.pca(rna)
     sc.external.pp.harmony_integrate(rna, key=sample_col)
     sc.pp.neighbors(rna, n_neighbors=n_neighbours, use_rep="X_pca_harmony")
-    sc.tl.umap(rna, random_state=42)
+    sc.tl.umap(rna, min_dist=min_umap_dist, random_state=42)
     sc.tl.leiden(rna, resolution=leiden_res)
 
     # the expensive processing is largely done, free up GPU memory
