@@ -1,14 +1,12 @@
 """
-Classes to incorporate functions from `core.py` into HGTC workflow.
+Classes to incorporate functions from `functions.py` into HGTC workflow.
 
 todo: any actual code here, e.g. from `firstlook.py`, should probably
- be put into functions in `core.py` or somewhere else. This file should
+ be put into functions in `functions.py` or somewhere else. This file should
  ideally be close to 100% structural class details.
 
-todo: `core.py` will use `scanpy_gpu_helper.pick_backend()` to automatically
- set whether we use `rapids-singlecell` or not. This is not very robust
- as there are some differences in some `sc` vs `rsc` functions. So should
- think about whether there is (a need for) a smarter way to set this.
+todo: think about whether rapids-singlecell is needed. Perhaps not as
+ the functions here are not particularly heavy lifting.
 """
 
 import os
@@ -44,19 +42,18 @@ from typing import Dict, Any, Optional, Union, List, Tuple
 from . import functions as scfunc
 
 # from hgtc_toolkit.src.datascience.tools_mixtureModels import mixture_models as mix
-# from hgtc_toolkit.src.datascience.orchestration.BaseClasses import (
-# BaseMethod,
-# BaseOperation,
-# )
+from datascience.orchestration.BaseClasses import (
+BaseMethod,
+BaseOperation,
+)
+
+# placeholders if I can't import hgtc_toolkit
+# class BaseOperation(ABC):
+#     pass
 
 
-# placeholders until I can import hgtc_toolkit
-class BaseOperation(ABC):
-    pass
-
-
-class BaseMethod(ABC):
-    pass
+# class BaseMethod(ABC):
+#     pass
 
 
 class inspect(BaseOperation):

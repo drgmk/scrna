@@ -140,13 +140,14 @@ def filter_cells_genes(adata, min_genes=200, min_cells=3):
         Minimum number of cells a gene must be expressed in to be kept.
     """
     mask1, _ = sc.pp.filter_cells(adata, min_genes=min_genes, inplace=False)
+    sc.pp.filter_cells(adata, min_genes=min_genes, inplace=True)
     mask2, _ = sc.pp.filter_genes(adata, min_cells=min_cells, inplace=False)
-    adata = adata[mask1 or mask2, :]
+    sc.pp.filter_genes(adata, min_cells=min_cells, inplace=True)
     adata.uns["meta_filter_cells_genes"] = {
         "min_genes": min_genes,
         "min_cells": min_cells,
     }
-    return mask1 or mask2
+    return mask1, mask2
 
 
 def trim_outliers(

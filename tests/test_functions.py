@@ -122,7 +122,7 @@ def test_compute_qc_metrics(pbmc):
 def test_filter_cells_genes(pbmc):
     # Placeholder: test for filter_cells_genes
     scfunc.filter_cells_genes(pbmc)
-    assert "filter_cells_genes" in pbmc.uns
+    assert "meta_filter_cells_genes" in pbmc.uns
 
 
 def test_get_cell_cycle_genes(pbmc):
