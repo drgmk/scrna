@@ -70,7 +70,7 @@ def main():
     pct_outlier_cutoff = 99.0
     n_neighbours = 20
     leiden_res = 0.8
-    min_umap_dist = 0.5
+    min_umap_dist = 0.3
 
     parser = argparse.ArgumentParser(
         description="First look at single-cell RNA-seq data"
@@ -376,6 +376,10 @@ def main():
     sc.tl.umap(rna, min_dist=min_umap_dist, random_state=42)
     sc.tl.leiden(rna, resolution=leiden_res)
 
+    # extra umaps with different min_dist
+    sc.tl.umap(rna, min_dist=min_umap_dist/2, random_state=42, key_added=f'X_umap_half_{min_umap_dist}_')
+    sc.tl.umap(rna, min_dist=min_umap_dist*2, random_state=42, key_added=f'X_umap_twice_{min_umap_dist}_')
+
     # the expensive processing is largely done, free up GPU memory
     sc.to_cpu(rna)
     gc.collect()
@@ -423,6 +427,18 @@ def main():
             )
     fig.tight_layout()
     fig.savefig(str(figs_path / "umap_overview.pdf"))
+
+    # umaps with different min_dist
+    fig , ax = plt.subplots(1, 2, figsize=(10,3.5))
+    for i, min_dist in enumerate(['half', 'twice']):
+        sc.pl.embedding(rna, f'X_umap_{min_dist}_{min_umap_dist}_', color='leiden', ax=ax[i], show=False)
+        ax[i].set_title(f'leiden (min_dist={min_umap_dist/2 if min_dist=="half" else min_umap_dist*2})')
+
+    fig.tight_layout()
+    fig.savefig(str(figs_path / f'umap_leiden_min_dist.pdf'))
+
+    fig.tight_layout()
+    fig.savefig(str(figs_path / f'umap_leiden_min_dist.pdf'))
 
     # cell types
     markers = dc.op.resource("PanglaoDB", organism=organism)
@@ -540,6 +556,7 @@ def main():
         "umap_overview",
         "umap_celltypes",
         "umap_markers",
+        "umap_leiden_min_dist",
     ]
     pdf_paths = {}
     png_paths = {}
@@ -620,6 +637,7 @@ def main():
     pdf.image(
         str(png_paths["umap_markers"]), x=margin_x, y=margin_y, w=panel_w * 2, h=panel_h
     )
+    pdf.image(str(png_paths["umap_leiden_min_dist"]), x=margin_x, y=margin_y + panel_h, w=panel_w, h=panel_h/2)
 
     report_path = figs_path / "firstlook_report.pdf"
     pdf.output(str(report_path))
