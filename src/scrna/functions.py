@@ -910,7 +910,6 @@ def get_pseudobulk(adata, min_cells=10, sample="sample", group="group"):
     sc.pl.pca_variance_ratio(pdata)
     dc.pl.obsm(
         adata=pdata,
-        return_fig=True,
         nvar=5,
         dendrogram=True,
         titles=["PC scores", "Adjusted p-values"],

@@ -184,6 +184,9 @@ def main():
 
     if use_raw:
         rna.X = rna.raw.X
+    else:
+        if "counts" in rna.layers:
+            rna.X = rna.layers["counts"]
 
     # cut down the object to save memory
     print(f"memory in original adata: {rna.__sizeof__() // 1_000_000} MB")
