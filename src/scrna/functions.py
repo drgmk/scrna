@@ -988,7 +988,7 @@ def do_deg(pdata, design, contrast):
     return stat_res.results_df
 
 
-def celltypist_annotate_immune(adata, recluster=False):
+def celltypist_annotate_immune(adata, recluster=False, use_GPU=False):
     """Quick annotation of cell types using CellTypist.
 
     Parameters
@@ -1024,7 +1024,7 @@ def celltypist_annotate_immune(adata, recluster=False):
             model.write(celltypist.models.models_path + "/" + models[i])
 
     predictions_maintypes = celltypist.annotate(
-        rna_tmp, model=models[1], majority_voting=True
+        rna_tmp, model=models[1], majority_voting=True, use_GPU=use_GPU
     )
     rna_tmp = predictions_maintypes.to_adata(prefix="maintypes_")
     rna_tmp.obs = rna_tmp.obs[
@@ -1034,7 +1034,7 @@ def celltypist_annotate_immune(adata, recluster=False):
     adata.obs["maintypes_immune"] = rna_tmp.obs["maintypes_majority_voting"]
 
     predictions_subtypes = celltypist.annotate(
-        rna_tmp, model=models[0], majority_voting=True
+        rna_tmp, model=models[0], majority_voting=True, use_GPU=use_GPU
     )
     rna_tmp = predictions_subtypes.to_adata(prefix="subtypes_")
     rna_tmp.obs = rna_tmp.obs[
