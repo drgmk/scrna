@@ -912,7 +912,7 @@ def get_pseudobulk(adata, min_cells=10, sample="sample", group="group"):
     dc.pl.obsm(
         adata=pdata,
         nvar=5,
-        dendrogram=True,
+        dendrogram=False,
         titles=["PC scores", "Adjusted p-values"],
         figsize=(10, 5),
     )
