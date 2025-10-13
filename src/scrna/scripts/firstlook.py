@@ -504,7 +504,10 @@ def main():
         rna_orig.var_names_make_unique()
         rna_orig.obs_names_make_unique()
         # original counts
-        rna.layers["counts"] = rna_orig.X[mask, :][:, mask_genes]
+        if "counts" in rna_orig.layers:
+            rna.layers["counts"] = rna_orig.layers["counts"][mask, :][:, mask_genes]
+        else:
+            rna.layers["counts"] = rna_orig.X[mask, :][:, mask_genes]
         # apply mask to original obsm and varm
         for k in rna_orig.obsm.keys():
             rna.obsm[f"{k}_original"] = rna_orig.obsm[k][mask]
