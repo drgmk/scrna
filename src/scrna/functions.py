@@ -859,7 +859,9 @@ def rank_genes_groups_to_df(adata, key="rank_genes_groups"):
     return pd.concat(dfs, ignore_index=False)
 
 
-def get_pseudobulk(adata, min_cells=10, sample="sample", group="group"):
+def dc_get_pseudobulk(
+    adata, min_cells=10, sample="sample", group="group", obsm_dendrogram=True
+):
     """Create pseudobulk data from single-cell RNA data and perform PCA.
 
     Parameters
@@ -872,6 +874,8 @@ def get_pseudobulk(adata, min_cells=10, sample="sample", group="group"):
         Column name in `adata.obs` to use as sample identifier (default is 'sample').
     group : str, optional
         Column name in `adata.obs` to use as grouping variable (default is 'group').
+    obsm_dendrogram : bool, optional
+        Whether to include a dendrogram in the obsm heatmap plot (default is True).
     """
     pdata = dc.pp.pseudobulk(
         adata=adata,
@@ -908,22 +912,24 @@ def get_pseudobulk(adata, min_cells=10, sample="sample", group="group"):
     # print(pdata.obs)
     dc.tl.rankby_obsm(pdata, key="X_pca")
 
-    sc.pl.pca_variance_ratio(pdata)
-    dc.pl.obsm(
+    # sc.pl.pca_variance_ratio(pdata)
+
+    fig = dc.pl.obsm(
         adata=pdata,
         nvar=5,
-        dendrogram=False,
+        dendrogram=obsm_dendrogram,
         titles=["PC scores", "Adjusted p-values"],
         figsize=(10, 5),
+        return_fig=True,
     )
 
-    sc.pl.pca(
-        pdata,
-        color=[sample, group],
-        ncols=1,
-        size=300,
-        frameon=True,
-    )
+    # sc.pl.pca(
+    #     pdata,
+    #     color=[sample, group],
+    #     ncols=1,
+    #     size=300,
+    #     frameon=True,
+    # )
 
     dc.pl.filter_by_expr(
         adata=pdata,
@@ -952,10 +958,10 @@ def get_pseudobulk(adata, min_cells=10, sample="sample", group="group"):
         min_prop=0.1,
         min_smpls=2,
     )
-    return pdata
+    return pdata, fig
 
 
-def do_deg(pdata, design, contrast):
+def dc_deseq_deg(pdata, design, contrast):
     """Perform differential expression analysis using DESeq2 via decoupler.
 
     Parameters
@@ -986,6 +992,73 @@ def do_deg(pdata, design, contrast):
 
     # Extract results
     return stat_res.results_df
+
+
+def dc_collectri_tfs(deg_df, contrast, fig_path=Path("figures")):
+    """Perform transcription factor activity analysis using decoupler's ULM method.
+
+    Parameters
+    ----------
+    deg_df : pd.DataFrame
+        DataFrame containing differential expression results with a 'stat' column.
+    contrast : list
+        List specifying the contrast in the format [design_variable, condition1, condition2].
+    fig_path : Path, optional
+        Path to save the figures (default is 'figures').
+    """
+
+    stat_str = f"{contrast[1]}.vs.{contrast[2]}"
+    t_stat = deg_df[["stat"]].T.rename(index={"stat": stat_str})
+
+    collectri = dc.op.collectri(organism="human")
+
+    tf_acts, tf_padj = dc.mt.ulm(data=t_stat, net=collectri)
+
+    # Filter by sign padj
+    msk = (tf_padj.T < 0.05).iloc[:, 0]
+    tf_acts = tf_acts.loc[:, msk]
+
+    tfs = tf_acts.T.sort_values(tf_acts.T.columns[0]).index.tolist()
+
+    fig = dc.pl.barplot(data=tf_acts, name=stat_str, figsize=(5, 3.5), return_fig=True)
+    fig.savefig(fig_path / "collectri_significant.pdf")
+
+    fig = dc.pl.network(
+        net=collectri,
+        data=t_stat,
+        score=tf_acts,
+        sources=tfs,
+        targets=10,
+        figsize=(10, 10),
+        vcenter=True,
+        by_abs=True,
+        size_node=25,
+        return_fig=True,
+    )
+    fig.savefig(fig_path / "collectri_net.pdf")
+
+    x, y = plot_nxy(len(tf_acts.T))
+
+    fig, ax = plt.subplots(x, y, figsize=(10, 7), sharex=True, sharey=True)
+
+    for a, g in zip(
+        ax.flatten(), tf_acts.T.sort_values(tf_acts.T.columns[0]).index.tolist()
+    ):
+
+        dc.pl.volcano(
+            data=deg_df,
+            x="log2FoldChange",
+            y="pvalue",
+            net=collectri,
+            name=g,
+            top=10,
+            ax=a,
+        )
+
+    fig.tight_layout()
+    fig.savefig(fig_path / "collectri_volcanos.pdf")
+
+    return tf_acts, tf_padj
 
 
 def celltypist_annotate_immune(adata, recluster=False, use_GPU=False):
