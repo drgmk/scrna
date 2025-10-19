@@ -1045,6 +1045,9 @@ def dc_collectri_tfs(
 
     fig, ax = plt.subplots(x, y, figsize=(10, 7), sharex=True, sharey=True)
 
+    if x == 1 and y == 1:
+        ax = np.array([[ax]])
+
     for a, g in zip(
         ax.flatten(), tf_acts.T.sort_values(tf_acts.T.columns[0]).index.tolist()
     ):
