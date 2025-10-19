@@ -994,7 +994,9 @@ def dc_deseq_deg(pdata, design, contrast):
     return stat_res.results_df
 
 
-def dc_collectri_tfs(deg_df, contrast, organism="human", fig_path=Path("figures")):
+def dc_collectri_tfs(
+    deg_df, contrast, organism="human", fig_path=Path("figures"), fig_suffix=""
+):
     """Perform transcription factor activity analysis using decoupler's ULM method.
 
     Parameters
@@ -1023,7 +1025,7 @@ def dc_collectri_tfs(deg_df, contrast, organism="human", fig_path=Path("figures"
     tfs = tf_acts.T.sort_values(tf_acts.T.columns[0]).index.tolist()
 
     fig = dc.pl.barplot(data=tf_acts, name=stat_str, figsize=(5, 3.5), return_fig=True)
-    fig.savefig(fig_path / "collectri_significant.pdf")
+    fig.savefig(fig_path / f"collectri_significant{fig_suffix}.pdf")
 
     fig = dc.pl.network(
         net=collectri,
@@ -1037,7 +1039,7 @@ def dc_collectri_tfs(deg_df, contrast, organism="human", fig_path=Path("figures"
         size_node=25,
         return_fig=True,
     )
-    fig.savefig(fig_path / "collectri_net.pdf")
+    fig.savefig(fig_path / f"collectri_net{fig_suffix}.pdf")
 
     x, y = plot_nxy(len(tf_acts.T))
 
@@ -1058,7 +1060,7 @@ def dc_collectri_tfs(deg_df, contrast, organism="human", fig_path=Path("figures"
         )
 
     fig.tight_layout()
-    fig.savefig(fig_path / "collectri_volcanos.pdf")
+    fig.savefig(fig_path / f"collectri_volcanos{fig_suffix}.pdf")
 
     return tf_acts_, tf_padj
 
