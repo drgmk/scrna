@@ -994,7 +994,7 @@ def dc_deseq_deg(pdata, design, contrast):
     return stat_res.results_df
 
 
-def dc_collectri_tfs(deg_df, contrast, fig_path=Path("figures")):
+def dc_collectri_tfs(deg_df, contrast, organism="human", fig_path=Path("figures")):
     """Perform transcription factor activity analysis using decoupler's ULM method.
 
     Parameters
@@ -1003,6 +1003,8 @@ def dc_collectri_tfs(deg_df, contrast, fig_path=Path("figures")):
         DataFrame containing differential expression results with a 'stat' column.
     contrast : list
         List specifying the contrast in the format [design_variable, condition1, condition2].
+    organism : str, optional
+        Target organism for Collectri network (default is 'human').
     fig_path : Path, optional
         Path to save the figures (default is 'figures').
     """
@@ -1010,13 +1012,13 @@ def dc_collectri_tfs(deg_df, contrast, fig_path=Path("figures")):
     stat_str = f"{contrast[1]}.vs.{contrast[2]}"
     t_stat = deg_df[["stat"]].T.rename(index={"stat": stat_str})
 
-    collectri = dc.op.collectri(organism="human")
+    collectri = dc.op.collectri(organism=organism)
 
-    tf_acts, tf_padj = dc.mt.ulm(data=t_stat, net=collectri)
+    tf_acts_, tf_padj = dc.mt.ulm(data=t_stat, net=collectri)
 
     # Filter by sign padj
     msk = (tf_padj.T < 0.05).iloc[:, 0]
-    tf_acts = tf_acts.loc[:, msk]
+    tf_acts = tf_acts_.loc[:, msk]
 
     tfs = tf_acts.T.sort_values(tf_acts.T.columns[0]).index.tolist()
 
@@ -1058,7 +1060,7 @@ def dc_collectri_tfs(deg_df, contrast, fig_path=Path("figures")):
     fig.tight_layout()
     fig.savefig(fig_path / "collectri_volcanos.pdf")
 
-    return tf_acts, tf_padj
+    return tf_acts_, tf_padj
 
 
 def celltypist_annotate_immune(adata, recluster=False, use_GPU=False):
