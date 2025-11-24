@@ -994,6 +994,73 @@ def dc_deseq_deg(pdata, design, contrast):
     return stat_res.results_df
 
 
+def plot_deseq_degs(results_df, pdata, rna, sample, contrast, n_genes=10, pval="padj"):
+    """Plot top DESeq2 differential expression results as violin plots.
+
+    Parameters
+    ----------
+    results_df : pd.DataFrame
+        DataFrame containing differential expression results from DESeq2.
+    pdata : AnnData
+        The pseudobulk RNA data.
+    rna : AnnData
+        The single-cell RNA data from which pdata was derived.
+    sample : string
+        pdata.obs column indicating individual samples (e.g. patient)
+    contrast : list
+        List specifying the contrast in the format [design_variable, condition1, condition2].
+    n_genes : int, optional
+        Number of top genes to plot (default is 10).
+    pval : str, optional
+        Column name in `results_df` to use for ranking genes (default is 'padj').
+    """
+
+    nx, ny = plot_nxy(n_genes * 2)
+    compare, comp0, comp1 = contrast
+    patient_order = pdata.obs.loc[pdata.obs[compare] == comp0, sample].unique().tolist()
+    patient_order.extend(
+        pdata.obs.loc[pdata.obs[compare] == comp1, sample].unique().tolist()
+    )
+    split = len(pdata.obs.loc[pdata.obs[compare] == comp0, sample].unique()) - 0.5
+
+    fig, ax = plt.subplots(ny, nx, figsize=(4 * nx, 4 * ny))
+    k = 0
+    for i in range(nx):
+        for j in range(0, ny, 2):
+            gene = results_df.sort_values(pval).index[k]
+            p = results_df.loc[gene, pval]
+            sc.pl.violin(
+                pdata,
+                keys=gene,
+                groupby=compare,
+                layer="normed_counts",
+                stripplot=True,
+                size=3,
+                ax=ax[j, i],
+                order=[comp0, comp1],
+                show=False,
+            )
+
+            sc.pl.violin(
+                rna,
+                keys=gene,
+                groupby=sample,
+                stripplot=True,
+                order=patient_order,
+                ax=ax[j + 1, i],
+                log=True,
+                density_norm="count",
+                show=False,
+            )
+            ax[j, i].set_title(f"{pval}: {p:.2e}")
+            ax[j + 1, i].set_xticklabels(ax[j + 1, i].get_xticklabels(), rotation=45)
+            ax[j + 1, i].axvline(x=split, color="grey", linestyle="--", alpha=0.5)
+            k += 1
+
+    fig.tight_layout()
+    return fig
+
+
 def dc_collectri_tfs(
     deg_df, contrast, organism="human", fig_path=Path("figures"), fig_suffix=""
 ):
