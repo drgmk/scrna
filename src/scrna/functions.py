@@ -1203,9 +1203,9 @@ def cellphonedb_prepare(
     annotation,
     outdir,
     layer=None,
-    viz_dir=os.path.expanduser("~/Documents/scRNA/cellphonedbviz"),
-    cpdb_file_path=os.path.expanduser(
-        "~/Documents/scRNA/cellphonedb-v5/cellphonedb.zip"
+    viz_dir=None,
+    cpdb_file_path=Path(
+        os.path.expanduser("~/Documents/scRNA/cellphonedb-v5/cellphonedb.zip")
     ),
 ):
     """Export data for CellPhoneDB analysis and run it with statistical method.
@@ -1220,9 +1220,9 @@ def cellphonedb_prepare(
         The output directory. This will be used for the cellphonedb run name, so be descriptive.
     layer : str, optional
         The layer key to use for the expression data (default is adata.X).
-    viz_dir : str, optional
-        The directory for visualization outputs (default is ~/Documents/scRNA/cellphonedbviz).
-    cpdb_file_path : str, optional
+    viz_dir : Path, optional
+        The directory for visualization outputs (default is None).
+    cpdb_file_path : Path, optional
         The path to the CellPhoneDB database zip file (default is ~/Documents/scRNA/cellphonedb-v5/cellphonedb.zip).
     """
     outdir = Path(outdir).resolve()
@@ -1277,6 +1277,8 @@ def cellphonedb_prepare(
         output_suffix=out_suffix,
     )
 
+    print(f"\nCellPhoneDB analysis complete. Results saved to {outdir}/")
+
     out_files = {
         "deconvoluted_result": outdir
         / f"statistical_analysis_deconvoluted_{out_suffix}.txt",
@@ -1290,25 +1292,25 @@ def cellphonedb_prepare(
         / f"statistical_analysis_interaction_scores_{out_suffix}.txt",
     }
 
-    viz_dir = Path(viz_dir).resolve()
-    viz_data_dir = viz_dir / "data" / run_name
-    viz_data_dir.mkdir(parents=True, exist_ok=True)
+    if viz_dir is not None:
+        viz_data_dir = viz_dir / "data" / run_name
+        viz_data_dir.mkdir(parents=True, exist_ok=True)
 
-    for k, v in out_files.items():
-        shutil.copy(v, viz_data_dir / v.name)
-
-    shutil.copy(microenvs_file_path, viz_data_dir / microenvs_file_path.name)
-    shutil.copy(cpdb_file_path, viz_data_dir / Path(cpdb_file_path).name)
-
-    with open(viz_data_dir / "config.yml", "w") as f:
-        f.write(
-            f"separator: '|' \n"
-            f"title: {run_name} \n"
-            f"microenvironments: microenvironment.tsv \n"
-            f"cellphonedb: cellphonedb.zip \n"
-        )
         for k, v in out_files.items():
-            f.write(f"{k}: {v.name} \n")
+            shutil.copy(v, viz_data_dir / v.name)
 
-    print(f"\nCellPhoneDB analysis complete. Results saved to {viz_data_dir}/")
-    print('\n Now go there and run "docker-compose build"')
+        shutil.copy(microenvs_file_path, viz_data_dir / microenvs_file_path.name)
+        shutil.copy(cpdb_file_path, viz_data_dir / cpdb_file_path.name)
+
+        with open(viz_data_dir / "config.yml", "w") as f:
+            f.write(
+                f"separator: '|' \n"
+                f"title: {run_name} \n"
+                f"microenvironments: microenvironment.tsv \n"
+                f"cellphonedb: cellphonedb.zip \n"
+            )
+            for k, v in out_files.items():
+                f.write(f"{k}: {v.name} \n")
+
+        print(f"\n Results copied for cellphonedbviz to {viz_data_dir}/")
+        print('\n Now go there and run "docker-compose build"')
