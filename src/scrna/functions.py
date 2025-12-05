@@ -1062,7 +1062,7 @@ def plot_deseq_degs(results_df, pdata, rna, sample, contrast, n_genes=10, pval="
 
 
 def dc_collectri_tfs(
-    deg_df, contrast, organism="human", fig_path=Path("figures"), fig_suffix=""
+    deg_df, contrast, organism="human", pval=0.05, fig_path=Path("figures"), fig_suffix=""
 ):
     """Perform transcription factor activity analysis using decoupler's ULM method.
 
@@ -1074,6 +1074,8 @@ def dc_collectri_tfs(
         List specifying the contrast in the format [design_variable, condition1, condition2].
     organism : str, optional
         Target organism for Collectri network (default is 'human').
+    pval : float, optional
+        P-value threshold for significance (default is 0.05).
     fig_path : Path, optional
         Path to save the figures (default is 'figures').
     """
@@ -1086,7 +1088,7 @@ def dc_collectri_tfs(
     tf_acts_, tf_padj = dc.mt.ulm(data=t_stat, net=collectri)
 
     # Filter by sign padj
-    msk = (tf_padj.T < 0.05).iloc[:, 0]
+    msk = (tf_padj.T < pval).iloc[:, 0]
     tf_acts = tf_acts_.loc[:, msk]
 
     tfs = tf_acts.T.sort_values(tf_acts.T.columns[0]).index.tolist()
