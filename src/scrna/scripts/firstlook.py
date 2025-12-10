@@ -582,13 +582,14 @@ def main():
         images[0].save(out_path, "PNG")
 
     # convert PDFs to PNGs using multiprocessing
-    with mp.Pool() as pool:
-        pool.starmap(
-            pdf_to_png,
-            [(pdf_paths[k], png_paths[k]) for k in pdf_paths.keys()],
-        )
-    # for k in pdf_paths.keys():
-        # pdf_to_png(pdf_paths[k], png_paths[k])
+    # with mp.Pool() as pool:
+    #     pool.starmap(
+    #         pdf_to_png,
+    #         [(pdf_paths[k], png_paths[k]) for k in pdf_paths.keys()],
+    #     )
+    # convert one-by-one
+    for k in pdf_paths.keys():
+        pdf_to_png(pdf_paths[k], png_paths[k])
 
     # Create PDF report
     pdf = FPDF(orientation="L", unit="mm", format="A4")
