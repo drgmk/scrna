@@ -9,6 +9,10 @@ Two ways to use it
 
     sc = pick_backend()  # looks like scanpy, uses GPU+rsc if available
     adata = sc.read_h5ad("pbmc.h5ad")
+    
+    # Enable memory management for large datasets
+    sc.enable_memory_manager()
+    
     sc.pp.normalize_total(adata, target_sum=1e4)
     sc.pp.highly_variable_genes(adata, n_top_genes=3000, flavor="seurat_v3")
     sc.tl.pca(adata, n_comps=50)
@@ -26,6 +30,7 @@ Two ways to use it
 
     from gpu_scanpy_helper import pick_backend, gpu_session
     b = pick_backend()
+    b.enable_memory_manager()
     with gpu_session(b, adata):
         b.pp.normalize_total(adata)
         b.tl.pca(adata)
@@ -41,6 +46,8 @@ Notes
 - When the GPU path is active, wrappers will move the passed `AnnData` to GPU *before*
  calling the underlying function. They do **not** automatically move it back; call
  `sc.to_cpu(adata)` or use `gpu_session(..., leave_on_gpu=False)` to return to CPU at block exit.
+- Memory management can be enabled once via `sc.enable_memory_manager()` 
+ and will apply to all subsequent operations for that backend instance.
 """
 
 from __future__ import annotations
@@ -130,6 +137,9 @@ class Backend:
 
     Behaves like the `scanpy` module: exposes `.pp`, `.tl`, `.pl`, and also
     forwards other top-level attributes (e.g. `read_h5ad`, `settings`, etc.).
+    
+    Supports GPU memory management via `enable_memory_manager()` for efficient
+    handling of large datasets.
     """
 
     def __init__(self, prefer_gpu: bool = True, force_cpu: bool = False):
@@ -147,6 +157,7 @@ class Backend:
         self._rsc = None
         self._using_rsc = False
         self.is_gpu = False
+        self._memory_manager_enabled = False
 
         if not self.force_cpu and self.prefer_gpu:
             self._init_rsc_if_possible()
@@ -178,6 +189,42 @@ class Backend:
         self._rsc = rsc
         self._using_rsc = True
         self.is_gpu = True
+
+    # ---------- memory management ----------
+    def enable_memory_manager(self) -> None:
+        """Enable RAPIDS memory management for GPU operations.
+        
+        Use this once before calling processing functions to enable memory-efficient
+        operations on large datasets. On CPU backend, this is a no-op.
+        
+        Example
+        -------
+        >>> sc = pick_backend()
+        >>> sc.enable_memory_manager()
+        >>> # Now all subsequent operations use managed memory
+        >>> sc.pp.normalize_total(adata)
+        """
+        if not self._using_rsc:
+            # CPU backend doesn't need memory management setup
+            return
+        
+        try:
+            import rmm  # type: ignore
+            import cupy as cp  # type: ignore
+            from rmm.allocators.cupy import rmm_cupy_allocator  # type: ignore
+            
+            # Enable managed memory with RMM
+            rmm.reinitialize(managed_memory=True, pool_allocator=False)
+            cp.cuda.set_allocator(rmm_cupy_allocator)
+            
+            self._memory_manager_enabled = True
+            print("Memory management enabled with RMM managed_memory")
+        except Exception as e:
+            warnings.warn(
+                f"Failed to enable memory management: {e}. "
+                "Proceeding without memory management. "
+                "Ensure rmm is installed."
+            )
 
     # ---------- device moves ----------
     def to_gpu(self, adata: Any) -> Any:
