@@ -36,6 +36,7 @@ todo: simple differential expression between groups if group_col given.
 
 import os
 from pathlib import Path
+import multiprocessing as mp
 import numpy as np
 import pandas as pd
 import scanpy
@@ -407,6 +408,14 @@ def main():
     # fix this (again)
     rna.obs["samp_no"] = pd.Categorical(rna.obs["samp_no"])
 
+    # create subsampled rna for plotting
+    def rna_pl(rna, n=20_000):
+        if rna.n_obs > n:
+            rna_pl = sc.pp.sample(rna, n_obs=n, copy=True)
+        else:
+            rna_pl = rna.copy()
+        return rna_pl
+    
     fig, ax = plt.subplots(2, 2, figsize=(10, 7))
     for i, x in enumerate(
         zip(
@@ -419,7 +428,7 @@ def main():
         if vminmax:
             vmin, vmax = np.percentile(rna.obs[col], (1, 99))
         sc.pl.umap(
-            rna, color=col, vmin=vmin, vmax=vmax, ax=ax[i // 2, i % 2], show=False
+            rna_pl(rna), color=col, vmin=vmin, vmax=vmax, ax=ax[i // 2, i % 2], show=False
         )
         if i == 0:
             ax[i // 2, i % 2].set_title(
@@ -431,7 +440,7 @@ def main():
     # umaps with different min_dist
     fig , ax = plt.subplots(1, 2, figsize=(10,3.5))
     for i, min_dist in enumerate(['half', 'twice']):
-        sc.pl.embedding(rna, f'X_umap_{min_dist}_{min_umap_dist}_', color='leiden', ax=ax[i], show=False)
+        sc.pl.embedding(rna_pl(rna), f'X_umap_{min_dist}_{min_umap_dist}_', color='leiden', ax=ax[i], show=False)
         ax[i].set_title(f'leiden (min_dist={min_umap_dist/2 if min_dist=="half" else min_umap_dist*2})')
 
     fig.tight_layout()
@@ -484,7 +493,7 @@ def main():
     ):
         col, show_legend = x
         sc.pl.umap(
-            rna,
+            rna_pl(rna),
             color=col,
             ncols=2,
             legend_loc="on data" if show_legend else True,
@@ -517,7 +526,7 @@ def main():
         a = ax.flatten()[i]
         gene = marker_genes[k][0]
         vmax = scfunc.get_vmax(rna, [gene], percentile=99)
-        sc.pl.umap(rna, color=gene, vmax=vmax, ax=a, show=False)
+        sc.pl.umap(rna_pl(rna), color=gene, vmax=vmax, ax=a, show=False)
         a.set_title(f"{k}: {gene}")
 
     fig.tight_layout()
@@ -569,8 +578,14 @@ def main():
         images = convert_from_path(str(pdf_path), dpi=150)
         images[0].save(out_path, "PNG")
 
-    for k in pdf_paths.keys():
-        pdf_to_png(pdf_paths[k], png_paths[k])
+    # convert PDFs to PNGs using multiprocessing
+    with mp.Pool() as pool:
+        pool.starmap(
+            pdf_to_png,
+            [(pdf_paths[k], png_paths[k]) for k in pdf_paths.keys()],
+        )
+    # for k in pdf_paths.keys():
+        # pdf_to_png(pdf_paths[k], png_paths[k])
 
     # Create PDF report
     pdf = FPDF(orientation="L", unit="mm", format="A4")
