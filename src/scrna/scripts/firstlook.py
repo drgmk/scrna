@@ -414,7 +414,7 @@ def main():
     # subsampled rna for plotting
     def rna_pl(rna, n=20_000):
         if rna.n_obs > n:
-            rna_pl = sc.pp.sample(rna, n_obs=n, copy=True)
+            rna_pl = scanpy.pp.sample(rna, n_obs=n, copy=True)
         else:
             rna_pl = rna.copy()
         return rna_pl
