@@ -390,6 +390,9 @@ def main():
     batch_s_corrected = []
     for s in sample_order:
         tmp = rna[rna.obs[sample_col] == s].copy()
+        # can't compute silhouette with only one cluster (e.g. small no. of cells)
+        if len(tmp.obs['leiden'].unique()) < 2:
+            continue
         scores = 1 - np.abs(
             sklearn.metrics.silhouette_samples(tmp.obsm["X_pca"], tmp.obs["leiden"])
         )
@@ -408,7 +411,7 @@ def main():
     # fix this (again)
     rna.obs["samp_no"] = pd.Categorical(rna.obs["samp_no"])
 
-    # create subsampled rna for plotting
+    # subsampled rna for plotting
     def rna_pl(rna, n=20_000):
         if rna.n_obs > n:
             rna_pl = sc.pp.sample(rna, n_obs=n, copy=True)
