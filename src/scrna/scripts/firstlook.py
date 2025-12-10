@@ -210,7 +210,7 @@ def main():
     print(f"using backend: {'GPU' if sc.is_gpu else 'CPU'}")
     if rna.__sizeof__() // 1_000_000 > 4_000:
         sc.enable_memory_manager()
-    print(f"memory management enabled: {sc.is_memory_manager_enabled()}")
+    print(f"memory management enabled: {sc._memory_manager_enabled}")
 
     # sample details
     if "sample_order" in rna.uns:

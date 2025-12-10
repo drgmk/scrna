@@ -209,9 +209,9 @@ class Backend:
             return
         
         try:
-            import rmm  # type: ignore
-            import cupy as cp  # type: ignore
-            from rmm.allocators.cupy import rmm_cupy_allocator  # type: ignore
+            import rmm
+            import cupy as cp
+            from rmm.allocators.cupy import rmm_cupy_allocator
             
             # Enable managed memory with RMM
             rmm.reinitialize(managed_memory=True, pool_allocator=False)
