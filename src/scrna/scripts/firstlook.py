@@ -56,6 +56,14 @@ import dataframe_image as dfi
 import scrna
 import scrna.functions as scfunc
 
+# subsampled rna for plotting
+def rna_pl(rna, n=20_000):
+    if rna.n_obs > n:
+        rna_pl = scanpy.pp.sample(rna, n=n, copy=True)
+    else:
+        rna_pl = rna.copy()
+    return rna_pl
+
 
 def main():
     # Default values for CLI
@@ -205,7 +213,7 @@ def main():
     rna.X = rna.X.astype(np.float32)
     print(f"             cut down to: {rna.__sizeof__() // 1_000_000} MB")
 
-    # gpu helper
+    # gpu helper, 4GB is about the limit for 16BG GPU (scrublet)
     sc = scrna.scanpy_gpu_helper.pick_backend()
     print(f"using backend: {'GPU' if sc.is_gpu else 'CPU'}")
     if rna.__sizeof__() // 1_000_000 > 4_000:
@@ -352,7 +360,7 @@ def main():
     )
 
     fig = scfunc.plot_gene_counts(
-        rna, hue="samp_no", order=sample_number_order, mask=mask, show_masked=True
+        rna_pl(rna), hue="samp_no", order=sample_number_order, mask=mask, show_masked=True
     )
     fig.savefig(str(figs_path / "gene_counts_per_sample.pdf"))
 
@@ -416,14 +424,6 @@ def main():
     # fix this (again)
     rna.obs["samp_no"] = pd.Categorical(rna.obs["samp_no"])
 
-    # subsampled rna for plotting
-    def rna_pl(rna, n=20_000):
-        if rna.n_obs > n:
-            rna_pl = scanpy.pp.sample(rna, n=n, copy=True)
-        else:
-            rna_pl = rna.copy()
-        return rna_pl
-    
     fig, ax = plt.subplots(2, 2, figsize=(10, 7))
     for i, x in enumerate(
         zip(
