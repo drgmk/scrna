@@ -56,14 +56,21 @@ import dataframe_image as dfi
 import scrna
 import scrna.functions as scfunc
 
-# subsampled rna for plotting
-def rna_pl(rna, n=20_000):
+# subsampled rna (and vectors in also) for plotting
+def rna_pl(rna, also=[], n=20_000):
+    """Subset rna (and vectors in also) to len(n) for plotting."""
     if rna.n_obs > n:
-        rna_pl = scanpy.pp.sample(rna, n=n, copy=True)
+        keep = np.random.choice(rna.n_obs, size=n, replace=False)
+        rna_pl = rna[keep].copy()
+        also_pl = [a[keep].copy() for a in also]
     else:
         rna_pl = rna.copy()
-    return rna_pl
+        also_pl = also
 
+    if len(also) > 0:
+        return rna_pl, also_pl
+    else:
+        return rna_pl
 
 def main():
     # Default values for CLI
@@ -359,8 +366,9 @@ def main():
         pct=pct_outlier_cutoff,
     )
 
+    rna_toplot, mask_toplot = rna_pl(rna, also=[mask])
     fig = scfunc.plot_gene_counts(
-        rna_pl(rna), hue="samp_no", order=sample_number_order, mask=mask, show_masked=True
+        rna_toplot, hue="samp_no", order=sample_number_order, mask=mask_toplot[0], show_masked=True
     )
     fig.savefig(str(figs_path / "gene_counts_per_sample.pdf"))
 
