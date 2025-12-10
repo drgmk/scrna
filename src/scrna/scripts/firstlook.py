@@ -56,8 +56,6 @@ import dataframe_image as dfi
 import scrna
 import scrna.functions as scfunc
 
-sc = scrna.scanpy_gpu_helper.pick_backend()
-
 
 def main():
     # Default values for CLI
@@ -186,7 +184,7 @@ def main():
     os.makedirs(figs_path, exist_ok=True)
 
     # Read in data
-    rna = sc.read_h5ad(file_path)
+    rna = scanpy.read_h5ad(file_path)
     rna.var_names_make_unique()
     rna.obs_names_make_unique()
     print(f"reading: {file_path}")
@@ -206,6 +204,13 @@ def main():
     rna.varm = None
     rna.X = rna.X.astype(np.float32)
     print(f"             cut down to: {rna.__sizeof__() // 1_000_000} MB")
+
+    # gpu helper
+    sc = scrna.scanpy_gpu_helper.pick_backend()
+    print(f"using backend: {'GPU' if sc.is_gpu else 'CPU'}")
+    if rna.__sizeof__() // 1_000_000 > 4_000:
+        sc.enable_memory_manager()
+    print(f"memory management enabled: {sc.is_memory_manager_enabled()}")
 
     # sample details
     if "sample_order" in rna.uns:
