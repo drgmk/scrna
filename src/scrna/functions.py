@@ -1062,7 +1062,12 @@ def plot_deseq_degs(results_df, pdata, rna, sample, contrast, n_genes=10, pval="
 
 
 def dc_collectri_tfs(
-    deg_df, contrast, organism="human", pval=0.05, fig_path=Path("figures"), fig_suffix=""
+    deg_df,
+    contrast,
+    organism="human",
+    pval=0.05,
+    fig_path=Path("figures"),
+    fig_suffix="",
 ):
     """Perform transcription factor activity analysis using decoupler's ULM method.
 
@@ -1090,6 +1095,10 @@ def dc_collectri_tfs(
     # Filter by sign padj
     msk = (tf_padj.T < pval).iloc[:, 0]
     tf_acts = tf_acts_.loc[:, msk]
+
+    if len(tf_acts.T) == 0:
+        print("no significant TFs found")
+        return tf_acts_, tf_padj
 
     tfs = tf_acts.T.sort_values(tf_acts.T.columns[0]).index.tolist()
 
