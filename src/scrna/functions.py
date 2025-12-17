@@ -167,8 +167,8 @@ def trim_outliers(
         Independent variable.
     y : array-like
         Dependent variable.
-    groups : array-like, optional
-        Group names, to trim outliers per-group.
+    groupby : str, optional
+        Column name in `adata.obs` to group by before fitting line and trimming outliers.
     extra_mask : dict, optional
         Dictionary specifying additional masks to apply before trimming outliers.
         Format is {column_name: (threshold, 'min' or 'max')}.
@@ -238,6 +238,10 @@ def plot_gene_counts(
     mask : array-like, optional
         Boolean mask to filter the data before plotting.
         This could come from `trim_outliers`.
+    order : list, optional
+        List of group names in the order to plot. If None, uses the order in `adata.obs[hue].unique()`.
+    show_masked : bool, optional
+        Whether to show the masked (filtered out) points in light grey.
     colour_by : str, optional
         Column name in `adata.obs` to use for coloring the points.
     size_by : str, optional
@@ -860,7 +864,12 @@ def rank_genes_groups_to_df(adata, key="rank_genes_groups"):
 
 
 def dc_get_pseudobulk(
-    adata, min_cells=10, sample="sample", group="group", obsm_dendrogram=True
+    adata,
+    min_cells=10,
+    sample="sample",
+    group="group",
+    obsm_plot=True,
+    obsm_dendrogram=True,
 ):
     """Create pseudobulk data from single-cell RNA data and perform PCA.
 
@@ -874,6 +883,8 @@ def dc_get_pseudobulk(
         Column name in `adata.obs` to use as sample identifier (default is 'sample').
     group : str, optional
         Column name in `adata.obs` to use as grouping variable (default is 'group').
+    obsm_plot : bool, optional
+        Whether to do `dc.tl.rankby_obsm` and `dc.pl.obsm`(default is True).
     obsm_dendrogram : bool, optional
         Whether to include a dendrogram in the obsm heatmap plot (default is True).
     """
@@ -910,18 +921,21 @@ def dc_get_pseudobulk(
     dc.pp.swap_layer(adata=pdata, key="counts", inplace=True)
 
     # print(pdata.obs)
-    dc.tl.rankby_obsm(pdata, key="X_pca")
+    if obsm_plot:
+        dc.tl.rankby_obsm(pdata, key="X_pca")
 
-    # sc.pl.pca_variance_ratio(pdata)
+        # sc.pl.pca_variance_ratio(pdata)
 
-    fig = dc.pl.obsm(
-        adata=pdata,
-        nvar=5,
-        dendrogram=obsm_dendrogram,
-        titles=["PC scores", "Adjusted p-values"],
-        figsize=(10, 5),
-        return_fig=True,
-    )
+        fig = dc.pl.obsm(
+            adata=pdata,
+            nvar=5,
+            dendrogram=obsm_dendrogram,
+            titles=["PC scores", "Adjusted p-values"],
+            figsize=(10, 5),
+            return_fig=True,
+        )
+    else:
+        fig = None
 
     # sc.pl.pca(
     #     pdata,
