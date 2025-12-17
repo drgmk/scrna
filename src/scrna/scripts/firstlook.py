@@ -153,6 +153,12 @@ def main():
         help="Percentile cutoff for outlier detection",
     )
     parser.add_argument(
+        "--zero_center",
+        action="store_true",
+        default=True,
+        help="Center data for PCA (densifies X)",
+    )
+    parser.add_argument(
         "--n_neighbours",
         type=int,
         default=n_neighbours,
@@ -403,6 +409,7 @@ def main():
     # UMAPs
     sc.pp.normalize_total(rna, target_sum=1e4)
     sc.pp.log1p(rna)
+    sc.pp.scale(rna, zero_center=args.center, max_value=10)
     sc.pp.highly_variable_genes(rna)
     sc.tl.pca(rna)
     sc.external.pp.harmony_integrate(rna, key=sample_col)
