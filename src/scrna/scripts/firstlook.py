@@ -409,6 +409,7 @@ def main():
     # UMAPs
     sc.pp.normalize_total(rna, target_sum=1e4)
     sc.pp.log1p(rna)
+    rna.layers['log1p_1e4'] = rna.X.copy()
     sc.pp.scale(rna, zero_center=args.zero_center, max_value=10)
     sc.pp.highly_variable_genes(rna)
     sc.tl.pca(rna)
@@ -540,7 +541,7 @@ def main():
     )
     rna.obs["celltype_panglao"] = rna.obs["leiden"].map(dict_ann)
 
-    scfunc.celltypist_annotate_immune(rna)
+    scfunc.celltypist_annotate_immune(rna, layer_key='log1p_1e4')
 
     fig, ax = plt.subplots(2, 2, figsize=(10, 7))
     for i, x in enumerate(

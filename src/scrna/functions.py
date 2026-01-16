@@ -1160,7 +1160,7 @@ def dc_collectri_tfs(
     return tf_acts_, tf_padj
 
 
-def celltypist_annotate_immune(adata, recluster=False, use_GPU=False):
+def celltypist_annotate_immune(adata, recluster=False, use_GPU=False, layer_key=None):
     """Quick annotation of cell types using CellTypist.
 
     Parameters
@@ -1169,6 +1169,10 @@ def celltypist_annotate_immune(adata, recluster=False, use_GPU=False):
         The RNA data.
     recluster : bool, optional
         Whether to recluster the data before annotation (default is False).
+    use_GPU : bool, optional
+        Whether to use GPU for CellTypist annotation (default is False).
+    layer_key : str, optional
+        The layer key to use for expression data (default is None, which uses adata.X).
     """
     if recluster:
         sc.pp.highly_variable_genes(adata)
@@ -1178,9 +1182,9 @@ def celltypist_annotate_immune(adata, recluster=False, use_GPU=False):
         sc.tl.leiden(adata, resolution=0.8)
 
     rna_tmp = adata.copy()
-    # use 10k normalised data if available
-    if "norm_1e4" in rna_tmp.layers.keys():
-        rna_tmp.X = rna_tmp.layers["norm_1e4"]
+    # use specified layer if available
+    if layer_key is not None and layer_key in rna_tmp.layers.keys():
+        rna_tmp.X = rna_tmp.layers[layer_key]
 
     models = ["Immune_All_Low.pkl", "Immune_All_High.pkl"]
     organism = guess_human_or_mouse(rna_tmp)
