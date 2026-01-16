@@ -226,7 +226,7 @@ def main():
             rna.X = rna.layers["counts"]
 
     # save this to compute log1p(norm) later
-    rna.raw.X = rna.X.copy()
+    rna.raw = rna.copy()
 
     # cut down the object to save memory
     print(f"memory in original adata: {rna.__sizeof__() // 1_000_000} MB")
