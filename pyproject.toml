@@ -59,6 +59,9 @@ Issues = "https://github.com/drgmk/scrna/issues"
 package-dir = {"" = "src"}
 packages = ["scrna"]
 
+[tool.setuptools.package-data]
+scrna = ["data/*"]
+
 [project.scripts]
 scrna_firstlook = "scrna.scripts.firstlook:main"
 
