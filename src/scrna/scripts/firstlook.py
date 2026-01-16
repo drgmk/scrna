@@ -155,7 +155,7 @@ def main():
     parser.add_argument(
         "--zero_center",
         action="store_true",
-        default=True,
+        default=False,
         help="Center data for PCA (densifies X)",
     )
     parser.add_argument(
