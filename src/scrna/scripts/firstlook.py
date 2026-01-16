@@ -409,7 +409,7 @@ def main():
     # UMAPs
     sc.pp.normalize_total(rna, target_sum=1e4)
     sc.pp.log1p(rna)
-    sc.pp.scale(rna, zero_center=args.center, max_value=10)
+    sc.pp.scale(rna, zero_center=args.zero_center, max_value=10)
     sc.pp.highly_variable_genes(rna)
     sc.tl.pca(rna)
     sc.external.pp.harmony_integrate(rna, key=sample_col)
