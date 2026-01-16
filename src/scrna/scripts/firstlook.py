@@ -225,10 +225,13 @@ def main():
         if "counts" in rna.layers:
             rna.X = rna.layers["counts"]
 
+    # save this to compute log1p(norm) later
+    rna.raw.X = rna.X.copy()
+
     # cut down the object to save memory
     print(f"memory in original adata: {rna.__sizeof__() // 1_000_000} MB")
     rna.layers = None
-    rna.raw = None
+    # rna.raw = None
     rna.obsm = None
     rna.varm = None
     rna.X = rna.X.astype(np.float32)
@@ -409,7 +412,6 @@ def main():
     # UMAPs
     sc.pp.normalize_total(rna, target_sum=1e4)
     sc.pp.log1p(rna)
-    rna.layers['log1p_1e4'] = rna.X.copy()
     sc.pp.scale(rna, zero_center=args.zero_center, max_value=10)
     sc.pp.highly_variable_genes(rna)
     sc.tl.pca(rna)
@@ -541,8 +543,11 @@ def main():
     )
     rna.obs["celltype_panglao"] = rna.obs["leiden"].map(dict_ann)
 
-    # celltypist, which expects a densified matrix (or will convert to one)
-    rna.layers['log1p_1e4'] = rna.layers['log1p_1e4'].toarray() if not isinstance(rna.layers['log1p_1e4'], np.ndarray) else rna.layers['log1p_1e4']
+    # celltypist, which expects log1p(norm), just use scanpy (CPU) for now
+    # otherwise we need to manage moving data between CPU and GPU
+    rna.layers['log1p_1e4'] = rna.raw.X.copy()
+    scanpy.pp.normalize_total(rna, target_sum=1e4, layer='log1p_1e4')
+    scanpy.pp.log1p(rna, layer='log1p_1e4')
     scfunc.celltypist_annotate_immune(rna, layer_key='log1p_1e4')
 
     fig, ax = plt.subplots(2, 2, figsize=(10, 7))
