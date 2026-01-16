@@ -225,9 +225,6 @@ def main():
         if "counts" in rna.layers:
             rna.X = rna.layers["counts"]
 
-    # save this to compute log1p(norm) later
-    rna.raw = rna.copy()
-
     # cut down the object to save memory
     print(f"memory in original adata: {rna.__sizeof__() // 1_000_000} MB")
     rna.layers = None
@@ -397,6 +394,9 @@ def main():
     rna.uns["meta_qc_mask_cells"] = mask
     rna.uns["meta_qc_mask_genes"] = mask_genes
     rna = rna[mask, mask_genes].copy()
+
+    # save this to compute log1p(norm) later
+    rna.raw = rna.copy()
 
     # Doublets
     sc.pp.scrublet(rna, batch_key=sample_col)
