@@ -541,6 +541,8 @@ def main():
     )
     rna.obs["celltype_panglao"] = rna.obs["leiden"].map(dict_ann)
 
+    # celltypist, which expects a densified matrix (or will convert to one)
+    rna.layers['log1p_1e4'] = rna.layers['log1p_1e4'].toarray() if not isinstance(rna.layers['log1p_1e4'], np.ndarray) else rna.layers['log1p_1e4']
     scfunc.celltypist_annotate_immune(rna, layer_key='log1p_1e4')
 
     fig, ax = plt.subplots(2, 2, figsize=(10, 7))
