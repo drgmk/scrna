@@ -414,7 +414,7 @@ def main():
     # normalised log1p for celltypist
     sc.pp.normalize_total(rna, target_sum=1e4)
     sc.pp.log1p(rna)
-    rna.layer["log1p_1e4"] = rna.X.copy()
+    rna.layers["log1p_1e4"] = rna.X.copy()
     sc.to_cpu(rna, layer='log1p_1e4')
     # now scaled version for further processing 
     sc.pp.scale(rna, zero_center=args.zero_center, max_value=10)
