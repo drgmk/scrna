@@ -228,13 +228,13 @@ def main():
     # cut down the object to save memory
     print(f"memory in original adata: {rna.__sizeof__() // 1_000_000} MB")
     rna.layers = None
-    # rna.raw = None
+    rna.raw = None
     rna.obsm = None
     rna.varm = None
     rna.X = rna.X.astype(np.float32)
     print(f"             cut down to: {rna.__sizeof__() // 1_000_000} MB")
 
-    # gpu helper, 4GB is about the limit for 16BG GPU (scrublet)
+    # gpu helper, 4GB is about the limit for 16GB GPU (scrublet the bottleneck)
     sc = scrna.scanpy_gpu_helper.pick_backend()
     print(f"using backend: {'GPU' if sc.is_gpu else 'CPU'}")
     if args.mem_mgmt:
@@ -409,9 +409,14 @@ def main():
         g2m_genes=cell_cycle_genes["g2m_genes"],
     )
 
-    # UMAPs
+    # process through to UMAP
+
+    # normalised log1p for celltypist
     sc.pp.normalize_total(rna, target_sum=1e4)
     sc.pp.log1p(rna)
+    rna.layer["log1p_1e4"] = rna.X.copy()
+    sc.to_cpu(rna, layer='log1p_1e4')
+    # now scaled version for further processing 
     sc.pp.scale(rna, zero_center=args.zero_center, max_value=10)
     sc.pp.highly_variable_genes(rna)
     sc.tl.pca(rna)
@@ -543,11 +548,7 @@ def main():
     )
     rna.obs["celltype_panglao"] = rna.obs["leiden"].map(dict_ann)
 
-    # celltypist, which expects log1p(norm), just use scanpy (CPU) for now
-    # otherwise we need to manage moving data between CPU and GPU
-    rna.layers['log1p_1e4'] = rna.raw.X.copy()
-    scanpy.pp.normalize_total(rna, target_sum=1e4, layer='log1p_1e4')
-    scanpy.pp.log1p(rna, layer='log1p_1e4')
+    # celltypist, which expects log1p(norm(1e4))
     scfunc.celltypist_annotate_immune(rna, layer_key='log1p_1e4')
 
     fig, ax = plt.subplots(2, 2, figsize=(10, 7))
@@ -598,7 +599,9 @@ def main():
     fig.tight_layout()
     fig.savefig(figs_path / "umap_markers.pdf")
 
-    # save the processed object, restoring some of the original data
+    # save the processed object:
+    #  - restore original data, subset, and put counts in a layer
+    #  - save obsm and varm as .obsm['X_original'] and .varm['X_original']
     if save:
         rna_orig = sc.read_h5ad(file_path)
         rna_orig.var_names_make_unique()

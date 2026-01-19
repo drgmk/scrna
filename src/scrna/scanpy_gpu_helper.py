@@ -227,18 +227,18 @@ class Backend:
             )
 
     # ---------- device moves ----------
-    def to_gpu(self, adata: Any) -> Any:
+    def to_gpu(self, adata: Any, layer: Optional[str] = None, convert_all: bool = False) -> Any:
         if self._using_rsc and hasattr(self._rsc, "get"):
             fn = getattr(self._rsc.get, "anndata_to_GPU", None)
             if callable(fn):
-                return fn(adata)
+                return fn(adata, layer=layer, convert_all=convert_all)
         return None
 
-    def to_cpu(self, adata: Any) -> Any:
+    def to_cpu(self, adata: Any, layer: Optional[str] = None, convert_all: bool = False) -> Any:
         if self._using_rsc and hasattr(self._rsc, "get"):
             fn = getattr(self._rsc.get, "anndata_to_CPU", None)
             if callable(fn):
-                return fn(adata)
+                return fn(adata, layer=layer, convert_all=convert_all)
         return None
 
     # ---------- module forwarding ----------
