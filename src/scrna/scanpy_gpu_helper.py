@@ -158,7 +158,7 @@ class Backend:
     # Methods that exist in scanpy but not in rapids-singlecell
     # These will always use the scanpy implementation even when on GPU
     _SCANPY_ONLY_METHODS = {
-        "tl": {"dendrogram"},
+        "tl": {"dendrogram", "rank_genes_groups"},
         "pp": set(),
     }
 
