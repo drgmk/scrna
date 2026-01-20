@@ -602,41 +602,32 @@ def main():
 
     # dotplots for annotated cell types
     # use logreg to get the top few
-    if sc._using_rsc:
-        try:
-            # this can fail, perhaps for too few cells
+    fig, ax = plt.subplots(figsize=(20, 7))
+    if rna.obs['celltype_panglao'].nunique() > 1:
+        if sc._using_rsc:
             sc.to_gpu(rna)
             sc._rsc.tl.rank_genes_groups_logreg(rna, groupby='celltype_panglao', n_genes=5,
                                                 penalty='l1')
             sc.to_cpu(rna)
-        except Exception as e:
-            sc.to_cpu(rna)
+        else:
             scanpy.tl.rank_genes_groups(rna, groupby='celltype_panglao', n_genes=5,
-                            method='logreg', l1_ratio=1, solver='liblinear')
-    else:
-        scanpy.tl.rank_genes_groups(rna, groupby='celltype_panglao', n_genes=5,
-                                    method='logreg', l1_ratio=1, solver='liblinear')
-    fig, ax = plt.subplots(figsize=(20, 7))
-    scanpy.pl.rank_genes_groups_dotplot(rna, n_genes=5, show=False, ax=ax)
-    fig.tight_layout()
+                                        method='logreg', l1_ratio=1, solver='liblinear')
+        scanpy.pl.rank_genes_groups_dotplot(rna, n_genes=5, show=False, ax=ax)
+        fig.tight_layout()
     fig.savefig(str(figs_path / "dotplot_celltype-panglao_top5-genes.pdf"))
 
-    if sc._using_rsc:
-        try:
+    fig, ax = plt.subplots(figsize=(20, 7))
+    if rna.obs['subtypes_immune'].nunique() > 1:
+        if sc._using_rsc:
             sc.to_gpu(rna)
             sc._rsc.tl.rank_genes_groups_logreg(rna, groupby='subtypes_immune', n_genes=5,
                                                 penalty='l1')
             sc.to_cpu(rna)
-        except Exception as e:
-            sc.to_cpu(rna)
+        else:
             scanpy.tl.rank_genes_groups(rna, groupby='subtypes_immune', n_genes=5,
-                            method='logreg', l1_ratio=1, solver='liblinear')
-    else:
-        scanpy.tl.rank_genes_groups(rna, groupby='subtypes_immune', n_genes=5,
-                                    method='logreg', l1_ratio=1, solver='liblinear')
-    fig, ax = plt.subplots(figsize=(20, 7))
-    scanpy.pl.rank_genes_groups_dotplot(rna, n_genes=5, show=False, ax=ax)
-    fig.tight_layout()
+                                        method='logreg', l1_ratio=1, solver='liblinear')
+        scanpy.pl.rank_genes_groups_dotplot(rna, n_genes=5, show=False, ax=ax)
+        fig.tight_layout()
     fig.savefig(str(figs_path / "dotplot_celltype-immune_top5-genes.pdf"))
 
     # expression using custom marker gene sets
