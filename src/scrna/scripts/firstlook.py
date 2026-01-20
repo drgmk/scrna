@@ -602,14 +602,27 @@ def main():
 
     # dotplots for annotated cell types
     # use logreg to get the top few
-    scanpy.tl.rank_genes_groups(rna, groupby='celltype_panglao', n_genes=5,
-                                method='logreg', l1_ratio=1, solver='liblinear')
+    if sc._using_rsc:
+        sc.to_gpu(rna)
+        sc._rsc.rank_genes_groups_logreg(rna, groupby='celltype_panglao', n_genes=5,
+                                         penalty='l1')
+        sc.to_cpu(rna)
+    else:
+        scanpy.tl.rank_genes_groups(rna, groupby='celltype_panglao', n_genes=5,
+                                    method='logreg', l1_ratio=1, solver='liblinear')
     fig, ax = plt.subplots(figsize=(20, 7))
     scanpy.pl.rank_genes_groups_dotplot(rna, n_genes=5, show=False, ax=ax)
     fig.tight_layout()
     fig.savefig(str(figs_path / "dotplot_celltype-panglao_top5-genes.pdf"))
-    scanpy.tl.rank_genes_groups(rna, groupby='subtypes_immune', n_genes=5,
-                                method='logreg', l1_ratio=1, solver='liblinear')
+
+    if sc._using_rsc:
+        sc.to_gpu(rna)
+        sc._rsc.rank_genes_groups_logreg(rna, groupby='subtypes_immune', n_genes=5,
+                                         penalty='l1')
+        sc.to_cpu(rna)
+    else:
+        scanpy.tl.rank_genes_groups(rna, groupby='subtypes_immune', n_genes=5,
+                                    method='logreg', l1_ratio=1, solver='liblinear')
     fig, ax = plt.subplots(figsize=(20, 7))
     scanpy.pl.rank_genes_groups_dotplot(rna, n_genes=5, show=False, ax=ax)
     fig.tight_layout()
@@ -621,14 +634,24 @@ def main():
     markers.filter_genes(rna.var_names, verbose=True)
     markers_df = markers.to_pandas(include_secondary=False)
     # run decoupler ULM
-    # todo: this could use rsc.dcg.ulm
     tmin = 1
-    dc.mt.ulm(
-        data=rna,
-        net=markers_df.rename(columns={'cell_type': 'source', 'gene': 'target'}),
-        tmin=tmin,
-        verbose=True
-    )
+    if sc._using_rsc:
+        sc.to_gpu(rna)    
+        sc._rsc.dcg.ulm(
+            data=rna,
+            net=markers_df.rename(columns={'cell_type': 'source', 'gene': 'target'}),
+            tmin=tmin,
+            verbose=True
+        )
+        sc.to_cpu(rna)
+    else:
+        dc.mt.ulm(
+            data=rna,
+            net=markers_df.rename(columns={'cell_type': 'source', 'gene': 'target'}),
+            tmin=tmin,
+            verbose=True
+        )
+
     score = dc.pp.get_obsm(rna, key='score_ulm')
     nx, ny = scfunc.plot_nxy(len(markers.data))
     fig, ax = plt.subplots(ny, nx, figsize=(20, 14), sharex=True, sharey=True)
