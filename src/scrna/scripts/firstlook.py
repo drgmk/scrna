@@ -577,6 +577,7 @@ def main():
     # celltypist, which expects log1p(norm(1e4))
     scfunc.celltypist_annotate_immune(rna, layer_key='log1p_1e4')
 
+    # UMAPs cell types
     fig, ax = plt.subplots(2, 2, figsize=(10, 7))
     for i, x in enumerate(
         zip(
@@ -599,11 +600,28 @@ def main():
     fig.tight_layout()
     fig.savefig(str(figs_path / "umap_celltypes.pdf"))
 
+    # dotplots for annotated cell types
+    # use logreg to get the top few
+    sc.tl.rank_genes_groups(rna, groupby='celltype_panglao', n_genes=5,
+                            method='logreg', l1_ratio=1, solver='liblinear')
+    fig, ax = plt.subplots(figsize=(20, 7))
+    sc.pl.rank_genes_groups_dotplot(rna, n_genes=5, show=False, ax=ax)
+    fig.tight_layout()
+    fig.savefig(str(figs_path / "dotplot_celltype-panglao_top5-genes.pdf"))
+    sc.tl.rank_genes_groups(rna, groupby='subtypes_immune', n_genes=5,
+                            method='logreg', l1_ratio=1, solver='liblinear')
+    fig, ax = plt.subplots(figsize=(10, 7/2))
+    sc.pl.rank_genes_groups_dotplot(rna, n_genes=5, show=False, ax=ax)
+    fig.tight_layout()
+    fig.savefig(str(figs_path / "dotplot_celltype-immune_top5-genes.pdf"))
+
     # expression using custom marker gene sets
     # load marker genes
     markers = scrna.celltypemarkers.CellTypeMarkers(organism=organism)
     markers.filter_genes(rna.var_names, verbose=True)
     markers_df = markers.to_pandas(include_secondary=False)
+    # run decoupler ULM
+    # todo: this could use rsc.dcg.ulm
     tmin = 1
     dc.mt.ulm(
         data=rna,
@@ -622,6 +640,14 @@ def main():
     fig.tight_layout()
     fig.savefig(figs_path / "umap_curated-list_cell-expression.pdf")
     
+    # dotplot of above
+    fig, ax = plt.subplots(figsize=(20, 7))
+    sc.pl.dotplot(rna, markers.to_dict(include_secondary=False),
+                  groupby='leiden', use_raw=False,
+                  dendrogram=True, ax=ax, show=False)
+    fig.tight_layout()
+    fig.savefig(figs_path / "dotplot_curated-list-markers.pdf")
+
     # save the processed object:
     #  - restore original data, subset, and put counts in a layer
     #  - save obsm and varm as .obsm['X_original'] and .varm['X_original']
@@ -659,11 +685,14 @@ def main():
         "violin_qc_metrics_2",
         "sample_dendrogram",
         "umap_overview",
+        "dotplot_celltype-panglao_top5-genes",
+        "dotplot_celltype-immune_top5-genes",
         "umap_samples",
         "umap_celltypes",
         "umap_markers",
         "umap_leiden_min_dist",
         "umap_curated-list_cell-expression",
+        "dotplot_curated-list-markers",
     ]
     pdf_paths = {}
     png_paths = {}
@@ -798,7 +827,26 @@ def main():
         h=panel_h / 2,
     )
 
-    # marker genes
+    # cell type annotation dotplots
+    pdf.add_page()
+    pdf.cell(page_w - 2 * margin_x, 2,
+             "Cell type annotation dotplots", align="C", new_y="NEXT")
+    pdf.image(
+        str(png_paths["dotplot_celltype-panglao_top5-genes"]),
+        x=margin_x,
+        y=margin_y + title_h,
+        w=panel_w * 2,
+        h=panel_h,
+    )
+    pdf.image(
+        str(png_paths["dotplot_celltype-immune_top5-genes"]),
+        x=margin_x,
+        y=margin_y + title_h + panel_h,
+        w=panel_w * 2,
+        h=panel_h,
+    )
+
+    # custom cell type marker genes
     pdf.add_page()
     pdf.cell(page_w - 2 * margin_x, 2,
              "Scores for cell types of interest", align="C", new_y="NEXT")
@@ -808,6 +856,18 @@ def main():
         y=margin_y + title_h,
         w=panel_w * 2,
         h=panel_h * 2,
+    )
+
+    # dotplot for custom markers
+    pdf.add_page()
+    pdf.cell(page_w - 2 * margin_x, 2,
+             "Dotplot for curated list of marker genes", align="C", new_y="NEXT")
+    pdf.image(
+        str(png_paths["dotplot_curated-list-markers"]),
+        x=margin_x,
+        y=margin_y + title_h,
+        w=panel_w * 2,
+        h=panel_h,
     )
 
     report_path = figs_path / "firstlook_report.pdf"
