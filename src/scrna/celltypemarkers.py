@@ -201,6 +201,14 @@ class CellTypeMarkers:
             ]
             self.data[cell_type]["genes_secondary"] = filtered_secondary
 
+            # Remove genes with no primary or secondary genes left
+            if (not self.data[cell_type]["genes"] and
+                    not self.data[cell_type]["genes_secondary"]):
+                del self.data[cell_type]
+                if verbose:
+                    print(f"Removed cell type '{cell_type}' with no remaining marker genes.")
+
+            # Verbose output about missing genes
             if verbose and (missing_primary or missing_secondary):
                 missing_info = []
                 if missing_primary:

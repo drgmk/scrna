@@ -54,7 +54,6 @@ from fpdf import FPDF
 import dataframe_image as dfi
 
 import scrna
-import scrna.functions as scfunc
 
 
 # subsampled rna (and vectors in also) for plotting
@@ -309,7 +308,7 @@ def main():
         metrics_table = metrics[keep_cols].copy()
 
         # diagnostic plot for outliers
-        fig, ax = plt.subplots(figsize=(7, 5))
+        fig, ax = plt.subplots(figsize=(5, 7/2))
         sns.scatterplot(
             metrics_table,
             x="Estimated Number of Cells",
@@ -341,7 +340,7 @@ def main():
         metrics_table.set_index("samp_no", inplace=True)
 
         # diagnostic plot for outliers
-        fig, ax = plt.subplots(figsize=(7, 5))
+        fig, ax = plt.subplots(figsize=(5, 7/2))
         sns.scatterplot(
             metrics_table,
             x="Estimated Number of Cells",
@@ -395,8 +394,25 @@ def main():
     rna.uns["meta_qc_mask_genes"] = mask_genes
     rna = rna[mask, mask_genes].copy()
 
-    # save this to compute log1p(norm) later
-    rna.raw = rna.copy()
+    # Highest expressed genes
+    fig = scfunc.plot_top_genes(rna, n_top=10, hue='samp_no', order=sample_number_order, figsize=(20, 7))
+    fig.savefig(str(figs_path / "top_genes_per_sample.pdf"))
+
+    # violins of metrics
+    fig, ax = plt.subplots(1, 3, figsize=(20, 7/2))
+    for a, p in zip(ax.flatten(), ['n_genes_by_counts', 'total_counts', 'pct_counts_in_top_1_genes']):
+        sc.pl.violin(rna, p,
+                     groupby='samp_no', jitter=0.4, multi_panel=True, stripplot=False, log=True,
+                     ax=a, show=False, legend=False)
+    fig.tight_layout()
+    fig.savefig(str(figs_path / "violin_qc_metrics_1.pdf"))
+    fig, ax = plt.subplots(1, 3, figsize=(20, 7/2))
+    for a, p in zip(ax.flatten(), ['pct_counts_ribosomal', 'pct_counts_malat', 'pct_counts_mt']):
+        sc.pl.violin(rna, p,
+                     groupby='samp_no', jitter=0.4, multi_panel=True, stripplot=False, log=True,
+                     ax=a, show=False, legend=False)
+    fig.tight_layout()
+    fig.savefig(str(figs_path / "violin_qc_metrics_2.pdf"))
 
     # Doublets
     sc.pp.scrublet(rna, batch_key=sample_col)
@@ -469,6 +485,15 @@ def main():
     # fix this (again)
     rna.obs["samp_no"] = pd.Categorical(rna.obs["samp_no"])
 
+    # sample dendrogram
+    sc.tl.dendrogram(rna, groupby='samp_no', use_rep='X_pca_harmony')
+    fig, ax = plt.subplots(figsize=(5, 7/2))
+    sc.pl.dendrogram(rna, groupby='samp_no', orientation='left', ax=ax, show=False)
+    fig.suptitle('Sample dendrogram (harmony PCA)')
+    fig.tight_layout()
+    fig.savefig(str(figs_path / "sample_dendrogram.pdf"))
+
+    # UMAPs overview
     fig, ax = plt.subplots(2, 2, figsize=(10, 7))
     for i, x in enumerate(
         zip(
@@ -512,9 +537,10 @@ def main():
     fig.tight_layout()
     fig.savefig(str(figs_path / f"umap_leiden_min_dist.pdf"))
 
-    fig.tight_layout()
-    fig.savefig(str(figs_path / f"umap_leiden_min_dist.pdf"))
-
+    # UMAPS per sample
+    fig = scfunc.plot_umaps(rna, hue='samp_no', order=sample_number_order, figsize=(10, 7/2))
+    fig.savefig(figs_path / "umap_samples.pdf")
+    
     # cell types
     markers = dc.op.resource("PanglaoDB", organism=organism)
     markers = markers[
@@ -573,32 +599,29 @@ def main():
     fig.tight_layout()
     fig.savefig(str(figs_path / "umap_celltypes.pdf"))
 
-    # marker genes, we want the most specific one for each of T, TfH, B, GC B, Stromal, FDC
-    marker_genes = {
-        "T": {"genes": ["CD3E", "CD3D", "TRAC"]},
-        "TfH": {"genes": ["S1PR2", "CXCR5", "PDCD1"]},
-        "B": {"genes": ["MS4A1", "CD79A", "CD19"]},
-        "GC B": {"genes": ["AICDA", "S1PR2", "PCNA"]},
-        "Stromal": {"genes": ["COL1A2", "PDGFRA", "VIM"]},
-        "FDC": {"genes": ["CR2", "FDCSP", "CXCL13"]},
-    }
-    markers = scrna.celltypemarkers.CellTypeMarkers(
-        organism=organism, data=marker_genes
+    # expression using custom marker gene sets
+    # load marker genes
+    markers = scrna.celltypemarkers.CellTypeMarkers(organism=organism)
+    markers.filter_genes(rna.var_names, verbose=True)
+    markers_df = markers.to_pandas(include_secondary=False)
+    tmin = 1
+    dc.mt.ulm(
+        data=rna,
+        net=markers_df.rename(columns={'cell_type': 'source', 'gene': 'target'}),
+        tmin=tmin,
+        verbose=True
     )
-    markers.filter_genes(rna.var_names)
-    marker_genes = markers.to_dict()
-
-    fig, ax = plt.subplots(2, 3, figsize=(20, 7))
-    for i, k in enumerate(marker_genes.keys()):
+    score = dc.pp.get_obsm(rna, key='score_ulm')
+    nx, ny = scfunc.plot_nxy(len(markers.data))
+    fig, ax = plt.subplots(ny, nx, figsize=(20, 14), sharex=True, sharey=True)
+    for i, k in enumerate(markers.keys()):
         a = ax.flatten()[i]
-        gene = marker_genes[k][0]
-        vmax = scfunc.get_vmax(rna, [gene], percentile=99)
-        sc.pl.umap(rna_pl(rna), color=gene, vmax=vmax, ax=a, show=False)
-        a.set_title(f"{k}: {gene}")
-
+        if len(markers[k]) >= tmin:
+            sc.pl.umap(score, color=k, cmap='RdBu_r', vmax=3, ax=a, show=False)
+        a.set_title(k)
     fig.tight_layout()
-    fig.savefig(figs_path / "umap_markers.pdf")
-
+    fig.savefig(figs_path / "umap_curated-list_cell-expression.pdf")
+    
     # save the processed object:
     #  - restore original data, subset, and put counts in a layer
     #  - save obsm and varm as .obsm['X_original'] and .varm['X_original']
@@ -631,10 +654,16 @@ def main():
     pdfs = [
         "metrics_scatter",
         "gene_counts_per_sample",
+        "top_genes_per_sample",
+        "violin_qc_metrics_1",
+        "violin_qc_metrics_2",
+        "sample_dendrogram",
         "umap_overview",
+        "umap_samples",
         "umap_celltypes",
         "umap_markers",
         "umap_leiden_min_dist",
+        "umap_curated-list_cell-expression",
     ]
     pdf_paths = {}
     png_paths = {}
@@ -694,7 +723,14 @@ def main():
         h=panel_h / 2,
         keep_aspect_ratio=True,
     )
-
+    pdf.image(
+        str(png_paths["sample_dendrogram"]),
+        x=margin_x + panel_w / 2,
+        y=margin_y + title_h + panel_h / 2,
+        w=panel_w / 2,
+        h=panel_h / 2,
+        keep_aspect_ratio=True,
+    )
     pdf.image(
         str(png_paths["gene_counts_per_sample"]),
         x=margin_x,
@@ -717,17 +753,61 @@ def main():
         h=panel_h,
     )
 
-    # second page with more specific stuff
+    # top genes per sample and qc metrics
     pdf.add_page()
+    pdf.cell(page_w - 2 * margin_x, 2,
+             "Top Genes and QC metrics per sample after masking", align="C", new_y="NEXT")
     pdf.image(
-        str(png_paths["umap_markers"]), x=margin_x, y=margin_y, w=panel_w * 2, h=panel_h
+        str(png_paths["top_genes_per_sample"]),
+        x=margin_x,
+        y=margin_y + title_h,
+        w=panel_w * 2,
+        h=panel_h,
+    )
+    pdf.image(
+        str(png_paths["violin_qc_metrics_1"]),
+        x=margin_x,
+        y=margin_y + title_h + panel_h,
+        w=panel_w * 2,
+        h=panel_h / 2,
+    )
+    pdf.image(
+        str(png_paths["violin_qc_metrics_2"]),
+        x=margin_x,
+        y=margin_y + title_h + panel_h * 1.5,
+        w=panel_w * 2,
+        h=panel_h / 2,
+    )
+
+    # UMAP details
+    pdf.add_page()
+    pdf.cell(page_w - 2 * margin_x, 2,
+             "UMAPs per sample and clustering resolution", align="C", new_y="NEXT")
+    pdf.image(
+        str(png_paths["umap_samples"]),
+        x=margin_x,
+        y=margin_y + title_h,
+        w=panel_w * 2,
+        h=panel_h
     )
     pdf.image(
         str(png_paths["umap_leiden_min_dist"]),
         x=margin_x,
-        y=margin_y + panel_h,
+        y=margin_y + title_h + panel_h,
         w=panel_w,
         h=panel_h / 2,
+    )
+
+    # marker genes
+    pdf.add_page()
+    pdf.cell(page_w - 2 * margin_x, 2,
+             "Scores for cell types of interest", align="C", new_y="NEXT")
+    pdf.image(
+        str(png_paths["umap_curated-list_cell-expression"]),
+        x=margin_x,
+        y=margin_y + title_h,
+        w=panel_w * 2,
+        h=panel_h * 2,
     )
 
     report_path = figs_path / "firstlook_report.pdf"

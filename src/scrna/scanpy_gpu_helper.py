@@ -69,6 +69,7 @@ class _Namespace:
 
     For .pp and .tl, we ensure AnnData is on GPU when using rsc.
     For .pl we just forward the call (plotting is typically CPU‑side).
+    Methods in the scanpy-only registry will always use scanpy even when on GPU.
     """
 
     def __init__(self, backend: "Backend", submodule: str, move_to_gpu: bool):
@@ -77,7 +78,19 @@ class _Namespace:
         self._move = move_to_gpu
 
     def __getattr__(self, name: str) -> Callable[..., Any]:
-        lib = self._b._lib()
+        # Check if this method should always use scanpy (not available in rsc)
+        use_scanpy = (
+            self._b._using_rsc and 
+            name in self._b._SCANPY_ONLY_METHODS.get(self._sub, set())
+        )
+        
+        if use_scanpy:
+            # Use scanpy version even when on GPU backend
+            lib = self._b._sc
+        else:
+            # Use whichever library is active (rsc or scanpy)
+            lib = self._b._lib()
+        
         target_ns = getattr(lib, self._sub)
         target = getattr(target_ns, name)
 
@@ -141,6 +154,13 @@ class Backend:
     Supports GPU memory management via `enable_memory_manager()` for efficient
     handling of large datasets.
     """
+    
+    # Methods that exist in scanpy but not in rapids-singlecell
+    # These will always use the scanpy implementation even when on GPU
+    _SCANPY_ONLY_METHODS = {
+        "tl": {"dendrogram"},
+        "pp": set(),
+    }
 
     def __init__(self, prefer_gpu: bool = True, force_cpu: bool = False):
         self.prefer_gpu = prefer_gpu

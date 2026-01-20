@@ -320,7 +320,7 @@ def plot_gene_counts(
     return fig
 
 
-def plot_top_genes(adata, hue="sample", n_top=10, order=None):
+def plot_top_genes(adata, hue="sample", n_top=10, order=None, figsize=(10, 7)):
     """Plot the top 10 most highly expressed genes for each sample.
 
     Parameters
@@ -335,7 +335,7 @@ def plot_top_genes(adata, hue="sample", n_top=10, order=None):
     if order is None:
         order = adata.obs[hue].unique()
     nx, ny = plot_nxy(len(order))
-    fig, ax = plt.subplots(ny, nx, figsize=(18, 10), sharex=True, sharey=True)
+    fig, ax = plt.subplots(ny, nx, figsize=figsize, sharex=True, sharey=True)
     for i, s in enumerate(order):
         a = ax.flatten()[i]
         sc.pl.highest_expr_genes(
@@ -348,7 +348,7 @@ def plot_top_genes(adata, hue="sample", n_top=10, order=None):
     return fig
 
 
-def plot_umaps(adata, hue="sample", order=None):
+def plot_umaps(adata, hue="sample", order=None, figsize=(10, 7)):
     """Plot UMAPs for each sample and for all samples combined.
 
     Parameters
@@ -363,7 +363,7 @@ def plot_umaps(adata, hue="sample", order=None):
     if order is None:
         order = adata.obs[hue].unique()
     nx, ny = plot_nxy(len(order) + 1)
-    fig, ax = plt.subplots(ny, nx, figsize=(15, 8), sharex=True, sharey=True)
+    fig, ax = plt.subplots(ny, nx, figsize=figsize, sharex=True, sharey=True)
     for i, s in enumerate(order):
         a = ax.flatten()[i]
         sc.pl.umap(adata[adata.obs[hue] == s], ax=a, show=False, size=10)
