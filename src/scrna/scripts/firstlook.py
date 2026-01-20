@@ -586,7 +586,7 @@ def main():
         )
     ):
         col, show_legend = x
-        sc.pl.umap(
+        scanpy.pl.umap(
             rna_pl(rna),
             color=col,
             ncols=2,
@@ -602,16 +602,16 @@ def main():
 
     # dotplots for annotated cell types
     # use logreg to get the top few
-    sc.tl.rank_genes_groups(rna, groupby='celltype_panglao', n_genes=5,
-                            method='logreg', l1_ratio=1, solver='liblinear')
+    scanpy.tl.rank_genes_groups(rna, groupby='celltype_panglao', n_genes=5,
+                                method='logreg', l1_ratio=1, solver='liblinear')
     fig, ax = plt.subplots(figsize=(20, 7))
-    sc.pl.rank_genes_groups_dotplot(rna, n_genes=5, show=False, ax=ax)
+    scanpy.pl.rank_genes_groups_dotplot(rna, n_genes=5, show=False, ax=ax)
     fig.tight_layout()
     fig.savefig(str(figs_path / "dotplot_celltype-panglao_top5-genes.pdf"))
-    sc.tl.rank_genes_groups(rna, groupby='subtypes_immune', n_genes=5,
-                            method='logreg', l1_ratio=1, solver='liblinear')
-    fig, ax = plt.subplots(figsize=(10, 7/2))
-    sc.pl.rank_genes_groups_dotplot(rna, n_genes=5, show=False, ax=ax)
+    scanpy.tl.rank_genes_groups(rna, groupby='subtypes_immune', n_genes=5,
+                                method='logreg', l1_ratio=1, solver='liblinear')
+    fig, ax = plt.subplots(figsize=(20, 7))
+    scanpy.pl.rank_genes_groups_dotplot(rna, n_genes=5, show=False, ax=ax)
     fig.tight_layout()
     fig.savefig(str(figs_path / "dotplot_celltype-immune_top5-genes.pdf"))
 
