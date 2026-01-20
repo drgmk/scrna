@@ -604,8 +604,8 @@ def main():
     # use logreg to get the top few
     if sc._using_rsc:
         sc.to_gpu(rna)
-        sc._rsc.rank_genes_groups_logreg(rna, groupby='celltype_panglao', n_genes=5,
-                                         penalty='l1')
+        sc._rsc.tl.rank_genes_groups_logreg(rna, groupby='celltype_panglao', n_genes=5,
+                                            penalty='l1')
         sc.to_cpu(rna)
     else:
         scanpy.tl.rank_genes_groups(rna, groupby='celltype_panglao', n_genes=5,
@@ -617,8 +617,8 @@ def main():
 
     if sc._using_rsc:
         sc.to_gpu(rna)
-        sc._rsc.rank_genes_groups_logreg(rna, groupby='subtypes_immune', n_genes=5,
-                                         penalty='l1')
+        sc._rsc.tl.rank_genes_groups_logreg(rna, groupby='subtypes_immune', n_genes=5,
+                                            penalty='l1')
         sc.to_cpu(rna)
     else:
         scanpy.tl.rank_genes_groups(rna, groupby='subtypes_immune', n_genes=5,
