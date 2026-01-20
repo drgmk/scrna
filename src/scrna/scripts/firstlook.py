@@ -622,7 +622,7 @@ def main():
 
     if sc._using_rsc:
         try:
-        sc.to_gpu(rna)
+            sc.to_gpu(rna)
             sc._rsc.tl.rank_genes_groups_logreg(rna, groupby='subtypes_immune', n_genes=5,
                                                 penalty='l1')
             sc.to_cpu(rna)
