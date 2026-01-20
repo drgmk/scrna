@@ -610,6 +610,7 @@ def main():
                                                 penalty='l1')
             sc.to_cpu(rna)
         except Exception as e:
+            sc.to_cpu(rna)
             scanpy.tl.rank_genes_groups(rna, groupby='celltype_panglao', n_genes=5,
                             method='logreg', l1_ratio=1, solver='liblinear')
     else:
@@ -627,6 +628,7 @@ def main():
                                                 penalty='l1')
             sc.to_cpu(rna)
         except Exception as e:
+            sc.to_cpu(rna)
             scanpy.tl.rank_genes_groups(rna, groupby='subtypes_immune', n_genes=5,
                             method='logreg', l1_ratio=1, solver='liblinear')
     else:
