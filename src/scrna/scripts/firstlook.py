@@ -572,7 +572,7 @@ def main():
     dict_ann = (
         df[df["stat"] > 0].groupby("group").head(1).set_index("group")["name"].to_dict()
     )
-    rna.obs["celltype_panglao"] = rna.obs["leiden"].map(dict_ann)
+    rna.obs["celltype_panglao"] = pd.Categorical(rna.obs["leiden"].map(dict_ann))
 
     # celltypist, which expects log1p(norm(1e4))
     scfunc.celltypist_annotate_immune(rna, layer_key='log1p_1e4')
