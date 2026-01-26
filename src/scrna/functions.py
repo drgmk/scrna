@@ -348,7 +348,7 @@ def plot_top_genes(adata, hue="sample", n_top=10, order=None, figsize=(10, 7)):
     return fig
 
 
-def plot_umaps(adata, hue="sample", order=None, figsize=(10, 7)):
+def plot_umaps(adata, hue="sample", order=None, figsize=(15, 10.5)):
     """Plot UMAPs for each sample and for all samples combined.
 
     Parameters
@@ -757,20 +757,21 @@ def get_cell_cycle_genes(organism, gene_list=None):
         return {"s_genes": [], "g2m_genes": []}
 
 
-def remove_doublet_clusters(adata, groupby="leiden"):
-    """Remove groups identified as majority doublets by Scrublet."""
-    tmp = (
-        adata.obs.groupby(groupby, observed=False)["predicted_doublet"]
-        .agg(pd.Series.mode)
-        .reset_index()
-    )
+def remove_doublet_clusters(adata, groupby="leiden", threshold=0.5):
+    """Remove groups identified as having a sufficient proportion of doublets by Scrublet."""
 
-    if tmp["predicted_doublet"].sum() == 0:
+    leiden_groups = rna.obs.groupby(groupby, observed=False).agg(
+        predicted_doublet=("predicted_doublet", "sum")
+    )
+    total_counts = rna.obs.groupby(groupby, observed=False).size()
+    doublet_fraction = (leiden_groups['predicted_doublet'] / total_counts)
+
+    if doublet_fraction.sum() == 0:
         print("no doublet clusters found")
-        return
+        return adata
 
     remove = []
-    for i in tmp.loc[tmp["predicted_doublet"] == True, groupby]:
+    for i in doublet_fraction.loc[doublet_fraction > threshold].index:
         remove.append(i)
 
     print(f"doublet clusters removed: {remove}")
