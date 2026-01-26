@@ -179,6 +179,12 @@ def main():
         help="Leiden clustering resolution",
     )
     parser.add_argument(
+        "--use_cpu",
+        action="store_true",
+        default=False,
+        help="Force use of CPU even if GPU available",
+    )
+    parser.add_argument(
         "--mem_mgmt",
         action="store_true",
         default=False,
@@ -234,7 +240,7 @@ def main():
     print(f"             cut down to: {rna.__sizeof__() // 1_000_000} MB")
 
     # gpu helper, 4GB is about the limit for 16GB GPU (scrublet the bottleneck)
-    sc = scrna.scanpy_gpu_helper.pick_backend()
+    sc = scrna.scanpy_gpu_helper.pick_backend(force_cpu=args.use_cpu)
     print(f"using backend: {'GPU' if sc.is_gpu else 'CPU'}")
     if args.mem_mgmt:
         sc.enable_memory_manager()
