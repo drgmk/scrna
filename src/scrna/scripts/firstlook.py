@@ -714,7 +714,6 @@ def main():
         "dotplot_celltype-immune_top5-genes",
         "umap_samples",
         "umap_celltypes",
-        "umap_markers",
         "umap_leiden_min_dist",
         "umap_curated-list_cell-expression",
         "dotplot_curated-list-markers",
