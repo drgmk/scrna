@@ -760,10 +760,10 @@ def get_cell_cycle_genes(organism, gene_list=None):
 def remove_doublet_clusters(adata, groupby="leiden", threshold=0.5):
     """Remove groups identified as having a sufficient proportion of doublets by Scrublet."""
 
-    leiden_groups = rna.obs.groupby(groupby, observed=False).agg(
+    leiden_groups = adata.obs.groupby(groupby, observed=False).agg(
         predicted_doublet=("predicted_doublet", "sum")
     )
-    total_counts = rna.obs.groupby(groupby, observed=False).size()
+    total_counts = adata.obs.groupby(groupby, observed=False).size()
     doublet_fraction = (leiden_groups['predicted_doublet'] / total_counts)
 
     if doublet_fraction.sum() == 0:
