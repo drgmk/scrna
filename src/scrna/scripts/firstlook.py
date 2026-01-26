@@ -40,6 +40,7 @@ import multiprocessing as mp
 import numpy as np
 import pandas as pd
 import scanpy
+import harmonypy
 import decoupler as dc
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -442,7 +443,11 @@ def main():
     sc.pp.scale(rna, zero_center=args.zero_center, max_value=10)
     sc.pp.highly_variable_genes(rna)
     sc.tl.pca(rna)
-    sc.external.pp.harmony_integrate(rna, key=sample_col)
+    # scanpy is going to ditch external, use harmonypy directly
+    # sc.external.pp.harmony_integrate(rna, key=sample_col)
+    x = rna.obsm['X_pca'].astype(np.float64)
+    harmony_out = harmonypy.run_harmony(x, rna.obs, sample_col)
+    rna.obsm['X_pca_harmony'] = harmony_out.Z_corr
     sc.pp.neighbors(rna, n_neighbors=n_neighbours, use_rep="X_pca_harmony")
     sc.tl.umap(rna, min_dist=min_umap_dist, random_state=42)
     sc.tl.leiden(rna, resolution=leiden_res)
