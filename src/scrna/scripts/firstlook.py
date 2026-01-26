@@ -401,6 +401,9 @@ def main():
     rna.uns["meta_qc_mask_genes"] = mask_genes
     rna = rna[mask, mask_genes].copy()
 
+    print('After QC:')
+    print(rna)
+
     # Highest expressed genes
     fig = scfunc.plot_top_genes(rna, n_top=10, hue='samp_no', order=sample_number_order, figsize=(20, 7))
     fig.savefig(str(figs_path / "top_genes_per_sample.pdf"))

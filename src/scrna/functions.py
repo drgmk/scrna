@@ -367,9 +367,15 @@ def plot_umaps(adata, hue="sample", order=None, figsize=(10, 7)):
     for i, s in enumerate(order):
         a = ax.flatten()[i]
         sc.pl.umap(adata[adata.obs[hue] == s], ax=a, show=False, size=10)
+        # remove x/y labels from all but bottom left
+        if i % nx != 0:
+            a.set_ylabel("")            
+        if i // nx != ny - 1:
+            a.set_xlabel("")
         a.set_title(s)
 
     sc.pl.umap(adata, ax=ax.flatten()[-1], show=False, size=10)
+    ax.flatten()[-1].set_ylabel("")
     ax.flatten()[-1].set_title("all")
     fig.tight_layout()
     return fig
