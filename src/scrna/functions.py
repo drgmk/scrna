@@ -757,8 +757,23 @@ def get_cell_cycle_genes(organism, gene_list=None):
         return {"s_genes": [], "g2m_genes": []}
 
 
-def remove_doublet_clusters(adata, groupby="leiden", threshold=0.5):
-    """Remove groups identified as having a sufficient proportion of doublets by Scrublet."""
+def remove_doublet_clusters(adata, groupby="leiden", threshold=0.5, inplace=True):
+    """Remove groups identified as having a sufficient proportion of doublets by Scrublet.
+    
+    Parameters
+    ----------
+    adata : AnnData
+        The RNA data with Scrublet results in `adata.obs['predicted_doublet']`.
+    groupby : str
+        The column in `adata.obs` to use for grouping (default is 'leiden').
+    threshold : float
+        The fraction of predicted doublets above which to remove the group (default is 0.5).
+    inplace : bool
+        Whether to modify the AnnData object in place. If False, returns a new AnnData object with doublet clusters removed.
+    """
+
+    if not inplace:
+        adata = adata.copy()
 
     leiden_groups = adata.obs.groupby(groupby, observed=False).agg(
         predicted_doublet=("predicted_doublet", "sum")
@@ -767,16 +782,23 @@ def remove_doublet_clusters(adata, groupby="leiden", threshold=0.5):
     doublet_fraction = (leiden_groups['predicted_doublet'] / total_counts)
 
     if doublet_fraction.sum() == 0:
-        print("no doublet clusters found")
-        return adata
+        print(" no doublet clusters found")
+        if not inplace:
+            return adata
+        return
+    else:
+        remove = []
+        for i in doublet_fraction.loc[doublet_fraction > threshold].index:
+            remove.append(i)
 
-    remove = []
-    for i in doublet_fraction.loc[doublet_fraction > threshold].index:
-        remove.append(i)
-
-    print(f"doublet clusters removed: {remove}")
-    return adata[~adata.obs[groupby].isin(remove)]
-
+        print(f" doublet clusters removed: {remove}")
+        mask = ~adata.obs[groupby].isin(remove)
+        if inplace:
+            adata._inplace_subset_obs(mask)
+            return
+        else:
+            return adata[mask]
+            
 
 def get_highest_expr_cluster(adata, gene, groupby="leiden"):
     """Return cluster with highest gene expression
