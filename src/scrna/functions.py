@@ -158,6 +158,7 @@ def trim_outliers(
     extra_mask=None,
     extra_mask_boolean=None,
     pct=100.0,
+    poly_order=1,
 ):
     """Function to fit a line in log space, trim outliers, and return boolean mask.
 
@@ -176,19 +177,29 @@ def trim_outliers(
         Boolean mask to apply before trimming outliers.
     pct : int, optional
         Percentile to use for trimming outliers, default is 100 (no trimming).
+    poly_order : int, optional
+        Order of polynomial to fit. Linear fit (1) is default.
     """
 
     mask = np.ones(adata.shape[0], dtype=bool)
 
     if groupby is not None:
+        polys = []
         for g in np.unique(adata.obs[groupby]):
             mask_g = adata.obs[groupby] == g
-            mask[mask_g] = trim_outliers(
-                adata[mask_g, :], x=x, y=y, extra_mask=extra_mask, pct=pct
+            mask[mask_g], poly = trim_outliers(
+                adata[mask_g, :],
+                x=x,
+                y=y,
+                extra_mask=extra_mask,
+                pct=pct,
+                poly_order=poly_order,
             )
+            polys.append(poly)
 
         adata.uns["trim_outliers_mask"] = mask
-        return mask
+        adata.uns["trim_outliers_polys"] = polys
+        return mask, polys
 
     if extra_mask is None:
         extra_mask_ = np.ones(adata.shape[0], dtype=bool)
@@ -209,13 +220,17 @@ def trim_outliers(
 
     x_ = np.log10(adata.obs[x])
     y_ = np.log10(adata.obs[y])
-    fit = scipy.stats.linregress(x_[extra_mask_], y_[extra_mask_])
-    y_fit = fit.intercept + fit.slope * x_
+
+    # fit = scipy.stats.linregress(x_[extra_mask_], y_[extra_mask_])
+    # y_fit = fit.intercept + fit.slope * x_
+    poly_coeffs = np.polyfit(x_[extra_mask_], y_[extra_mask_], poly_order)
+    y_fit = np.polyval(poly_coeffs, x_)
+
     resid = y_ - y_fit
     thresh = np.percentile(resid, [100 - pct, pct])
     mask = np.logical_and(resid > thresh[0], resid < thresh[1])
     adata.uns["trim_outliers_mask"] = mask
-    return np.logical_and(mask, extra_mask_)
+    return np.logical_and(mask, extra_mask_), poly_coeffs
 
 
 def plot_gene_counts(
@@ -226,6 +241,7 @@ def plot_gene_counts(
     show_masked=True,
     colour_by="pct_counts_in_top_1_genes",
     size_by="pct_counts_mt",
+    poly_fits=None,
 ):
     """Plot gene counts and mitochondrial fraction for each sample.
 
@@ -246,6 +262,8 @@ def plot_gene_counts(
         Column name in `adata.obs` to use for coloring the points.
     size_by : str, optional
         Column name in `adata.obs` to use for the size of the points.
+    poly_fits : list of arrays, optional
+        List of polynomial coefficients to plot as lines for each group. Should be in the same order as `order`.
     """
 
     if mask is None:
@@ -296,6 +314,13 @@ def plot_gene_counts(
             #   vmin=0, vmax=vmax, cmap='Grays', zorder=-1)
 
         a.set_title(s)
+
+        if poly_fits is not None:
+            x = np.linspace(
+                tmp.obs["total_counts"].min(), tmp.obs["total_counts"].max(), 100
+            )
+            y = np.polyval(poly_fits[i], np.log10(x))
+            a.plot(x, 10**y, color="grey", linestyle="--")
 
     [a.set_visible(False) for a in ax.flatten()[i + 1 :]]
     if ny == 1:
@@ -369,7 +394,7 @@ def plot_umaps(adata, hue="sample", order=None, figsize=(15, 10.5)):
         sc.pl.umap(adata[adata.obs[hue] == s], ax=a, show=False, size=10)
         # remove x/y labels from all but bottom left
         if i % nx != 0:
-            a.set_ylabel("")            
+            a.set_ylabel("")
         if i // nx != ny - 1:
             a.set_xlabel("")
         a.set_title(s)
@@ -759,7 +784,7 @@ def get_cell_cycle_genes(organism, gene_list=None):
 
 def remove_doublet_clusters(adata, groupby="leiden", threshold=0.5, inplace=True):
     """Remove groups identified as having a sufficient proportion of doublets by Scrublet.
-    
+
     Parameters
     ----------
     adata : AnnData
@@ -779,7 +804,7 @@ def remove_doublet_clusters(adata, groupby="leiden", threshold=0.5, inplace=True
         predicted_doublet=("predicted_doublet", "sum")
     )
     total_counts = adata.obs.groupby(groupby, observed=False).size()
-    doublet_fraction = (leiden_groups['predicted_doublet'] / total_counts)
+    doublet_fraction = leiden_groups["predicted_doublet"] / total_counts
 
     if doublet_fraction.sum() == 0:
         print(" no doublet clusters found")
@@ -798,7 +823,7 @@ def remove_doublet_clusters(adata, groupby="leiden", threshold=0.5, inplace=True
             return
         else:
             return adata[mask]
-            
+
 
 def get_highest_expr_cluster(adata, gene, groupby="leiden"):
     """Return cluster with highest gene expression

@@ -315,7 +315,7 @@ def main():
         metrics_table = metrics[keep_cols].copy()
 
         # diagnostic plot for outliers
-        fig, ax = plt.subplots(figsize=(5, 7/2))
+        fig, ax = plt.subplots(figsize=(5, 7 / 2))
         sns.scatterplot(
             metrics_table,
             x="Estimated Number of Cells",
@@ -347,7 +347,7 @@ def main():
         metrics_table.set_index("samp_no", inplace=True)
 
         # diagnostic plot for outliers
-        fig, ax = plt.subplots(figsize=(5, 7/2))
+        fig, ax = plt.subplots(figsize=(5, 7 / 2))
         sns.scatterplot(
             metrics_table,
             x="Estimated Number of Cells",
@@ -375,7 +375,7 @@ def main():
     mask_genes, _ = scanpy.pp.filter_genes(rna, min_cells=min_cells, inplace=False)
     scfunc.compute_qc_metrics(rna)
 
-    mask = scfunc.trim_outliers(
+    mask, polys = scfunc.trim_outliers(
         rna,
         groupby=sample_col,
         extra_mask={
@@ -384,6 +384,7 @@ def main():
         },
         extra_mask_boolean=mask_cells,
         pct=pct_outlier_cutoff,
+        poly_order=2,
     )
 
     rna_toplot, mask_toplot = rna_pl(rna, also=[mask])
@@ -393,6 +394,7 @@ def main():
         order=sample_number_order,
         mask=mask_toplot[0],
         show_masked=True,
+        poly_fits=polys,
     )
     fig.savefig(str(figs_path / "gene_counts_per_sample.pdf"))
 
@@ -401,26 +403,50 @@ def main():
     rna.uns["meta_qc_mask_genes"] = mask_genes
     rna = rna[mask, mask_genes].copy()
 
-    print('After QC:')
+    print("After QC:")
     print(rna)
 
     # Highest expressed genes
-    fig = scfunc.plot_top_genes(rna, n_top=10, hue='samp_no', order=sample_number_order, figsize=(20, 7))
+    fig = scfunc.plot_top_genes(
+        rna, n_top=10, hue="samp_no", order=sample_number_order, figsize=(20, 7)
+    )
     fig.savefig(str(figs_path / "top_genes_per_sample.pdf"))
 
     # violins of metrics
-    fig, ax = plt.subplots(1, 3, figsize=(20, 7/2))
-    for a, p in zip(ax.flatten(), ['n_genes_by_counts', 'total_counts', 'pct_counts_in_top_1_genes']):
-        sc.pl.violin(rna, p,
-                     groupby='samp_no', jitter=0.4, multi_panel=True, stripplot=False, log=True,
-                     ax=a, show=False, legend=False)
+    fig, ax = plt.subplots(1, 3, figsize=(20, 7 / 2))
+    for a, p in zip(
+        ax.flatten(), ["n_genes_by_counts", "total_counts", "pct_counts_in_top_1_genes"]
+    ):
+        sc.pl.violin(
+            rna,
+            p,
+            groupby="samp_no",
+            jitter=0.4,
+            multi_panel=True,
+            stripplot=False,
+            log=True,
+            ax=a,
+            show=False,
+            legend=False,
+        )
     fig.tight_layout()
     fig.savefig(str(figs_path / "violin_qc_metrics_1.pdf"))
-    fig, ax = plt.subplots(1, 3, figsize=(20, 7/2))
-    for a, p in zip(ax.flatten(), ['pct_counts_ribosomal', 'pct_counts_malat', 'pct_counts_mt']):
-        sc.pl.violin(rna, p,
-                     groupby='samp_no', jitter=0.4, multi_panel=True, stripplot=False, log=True,
-                     ax=a, show=False, legend=False)
+    fig, ax = plt.subplots(1, 3, figsize=(20, 7 / 2))
+    for a, p in zip(
+        ax.flatten(), ["pct_counts_ribosomal", "pct_counts_malat", "pct_counts_mt"]
+    ):
+        sc.pl.violin(
+            rna,
+            p,
+            groupby="samp_no",
+            jitter=0.4,
+            multi_panel=True,
+            stripplot=False,
+            log=True,
+            ax=a,
+            show=False,
+            legend=False,
+        )
     fig.tight_layout()
     fig.savefig(str(figs_path / "violin_qc_metrics_2.pdf"))
 
@@ -441,16 +467,16 @@ def main():
     sc.pp.normalize_total(rna, target_sum=1e4)
     sc.pp.log1p(rna)
     rna.layers["log1p_1e4"] = rna.X.copy()
-    sc.to_cpu(rna, layer='log1p_1e4')
-    # now scaled version for further processing 
+    sc.to_cpu(rna, layer="log1p_1e4")
+    # now scaled version for further processing
     sc.pp.scale(rna, zero_center=args.zero_center, max_value=10)
     sc.pp.highly_variable_genes(rna)
     sc.tl.pca(rna)
     # scanpy is going to ditch external, use harmonypy directly
     # sc.external.pp.harmony_integrate(rna, key=sample_col)
-    x = rna.obsm['X_pca'].astype(np.float64)
+    x = rna.obsm["X_pca"].astype(np.float64)
     harmony_out = harmonypy.run_harmony(x, rna.obs, sample_col)
-    rna.obsm['X_pca_harmony'] = harmony_out.Z_corr
+    rna.obsm["X_pca_harmony"] = harmony_out.Z_corr
     sc.pp.neighbors(rna, n_neighbors=n_neighbours, use_rep="X_pca_harmony")
     sc.tl.umap(rna, min_dist=min_umap_dist, random_state=42)
     sc.tl.leiden(rna, resolution=leiden_res)
@@ -500,10 +526,10 @@ def main():
     rna.obs["samp_no"] = pd.Categorical(rna.obs["samp_no"])
 
     # sample dendrogram
-    sc.tl.dendrogram(rna, groupby='samp_no', use_rep='X_pca_harmony')
-    fig, ax = plt.subplots(figsize=(5, 7/2))
-    sc.pl.dendrogram(rna, groupby='samp_no', orientation='left', ax=ax, show=False)
-    fig.suptitle('Sample dendrogram (harmony PCA)')
+    sc.tl.dendrogram(rna, groupby="samp_no", use_rep="X_pca_harmony")
+    fig, ax = plt.subplots(figsize=(5, 7 / 2))
+    sc.pl.dendrogram(rna, groupby="samp_no", orientation="left", ax=ax, show=False)
+    fig.suptitle("Sample dendrogram (harmony PCA)")
     fig.tight_layout()
     fig.savefig(str(figs_path / "sample_dendrogram.pdf"))
 
@@ -552,9 +578,11 @@ def main():
     fig.savefig(str(figs_path / f"umap_leiden_min_dist.pdf"))
 
     # UMAPS per sample
-    fig = scfunc.plot_umaps(rna, hue='samp_no', order=sample_number_order, figsize=(10, 7/2))
+    fig = scfunc.plot_umaps(
+        rna, hue="samp_no", order=sample_number_order, figsize=(10, 7 / 2)
+    )
     fig.savefig(figs_path / "umap_samples.pdf")
-    
+
     # cell types
     markers = dc.op.resource("PanglaoDB", organism=organism)
     markers = markers[
@@ -589,7 +617,7 @@ def main():
     rna.obs["celltype_panglao"] = pd.Categorical(rna.obs["leiden"].map(dict_ann))
 
     # celltypist, which expects log1p(norm(1e4))
-    scfunc.celltypist_annotate_immune(rna, layer_key='log1p_1e4')
+    scfunc.celltypist_annotate_immune(rna, layer_key="log1p_1e4")
 
     # UMAPs cell types
     fig, ax = plt.subplots(2, 2, figsize=(10, 7))
@@ -617,29 +645,43 @@ def main():
     # dotplots for annotated cell types
     # use logreg to get the top few
     fig, ax = plt.subplots(figsize=(20, 7))
-    if rna.obs['celltype_panglao'].nunique() > 1:
+    if rna.obs["celltype_panglao"].nunique() > 1:
         if sc._using_rsc:
             sc.to_gpu(rna)
-            sc._rsc.tl.rank_genes_groups_logreg(rna, groupby='celltype_panglao', n_genes=5,
-                                                penalty='l1')
+            sc._rsc.tl.rank_genes_groups_logreg(
+                rna, groupby="celltype_panglao", n_genes=5, penalty="l1"
+            )
             sc.to_cpu(rna)
         else:
-            scanpy.tl.rank_genes_groups(rna, groupby='celltype_panglao', n_genes=5,
-                                        method='logreg', l1_ratio=1, solver='liblinear')
+            scanpy.tl.rank_genes_groups(
+                rna,
+                groupby="celltype_panglao",
+                n_genes=5,
+                method="logreg",
+                l1_ratio=1,
+                solver="liblinear",
+            )
         scanpy.pl.rank_genes_groups_dotplot(rna, n_genes=5, show=False, ax=ax)
         fig.tight_layout()
     fig.savefig(str(figs_path / "dotplot_celltype-panglao_top5-genes.pdf"))
 
     fig, ax = plt.subplots(figsize=(20, 7))
-    if rna.obs['subtypes_immune'].nunique() > 1:
+    if rna.obs["subtypes_immune"].nunique() > 1:
         if sc._using_rsc:
             sc.to_gpu(rna)
-            sc._rsc.tl.rank_genes_groups_logreg(rna, groupby='subtypes_immune', n_genes=5,
-                                                penalty='l1')
+            sc._rsc.tl.rank_genes_groups_logreg(
+                rna, groupby="subtypes_immune", n_genes=5, penalty="l1"
+            )
             sc.to_cpu(rna)
         else:
-            scanpy.tl.rank_genes_groups(rna, groupby='subtypes_immune', n_genes=5,
-                                        method='logreg', l1_ratio=1, solver='liblinear')
+            scanpy.tl.rank_genes_groups(
+                rna,
+                groupby="subtypes_immune",
+                n_genes=5,
+                method="logreg",
+                l1_ratio=1,
+                solver="liblinear",
+            )
         scanpy.pl.rank_genes_groups_dotplot(rna, n_genes=5, show=False, ax=ax)
         fig.tight_layout()
     fig.savefig(str(figs_path / "dotplot_celltype-immune_top5-genes.pdf"))
@@ -652,38 +694,44 @@ def main():
     # run decoupler ULM
     tmin = 1
     if sc._using_rsc:
-        sc.to_gpu(rna)    
+        sc.to_gpu(rna)
         sc._rsc.dcg.ulm(
             data=rna,
-            net=markers_df.rename(columns={'cell_type': 'source', 'gene': 'target'}),
+            net=markers_df.rename(columns={"cell_type": "source", "gene": "target"}),
             tmin=tmin,
-            verbose=True
+            verbose=True,
         )
         sc.to_cpu(rna)
     else:
         dc.mt.ulm(
             data=rna,
-            net=markers_df.rename(columns={'cell_type': 'source', 'gene': 'target'}),
+            net=markers_df.rename(columns={"cell_type": "source", "gene": "target"}),
             tmin=tmin,
-            verbose=True
+            verbose=True,
         )
 
-    score = dc.pp.get_obsm(rna, key='score_ulm')
+    score = dc.pp.get_obsm(rna, key="score_ulm")
     nx, ny = scfunc.plot_nxy(len(markers.data))
     fig, ax = plt.subplots(ny, nx, figsize=(20, 14), sharex=True, sharey=True)
     for i, k in enumerate(markers.keys()):
         a = ax.flatten()[i]
         if len(markers[k]) >= tmin:
-            sc.pl.umap(score, color=k, cmap='RdBu_r', vmax=3, ax=a, show=False)
+            sc.pl.umap(score, color=k, cmap="RdBu_r", vmax=3, ax=a, show=False)
         a.set_title(k)
     fig.tight_layout()
     fig.savefig(figs_path / "umap_curated-list_cell-expression.pdf")
-    
+
     # dotplot of above
     fig, ax = plt.subplots(figsize=(20, 7))
-    sc.pl.dotplot(rna, markers.to_dict(include_secondary=False),
-                  groupby='leiden', use_raw=False,
-                  dendrogram=True, ax=ax, show=False)
+    sc.pl.dotplot(
+        rna,
+        markers.to_dict(include_secondary=False),
+        groupby="leiden",
+        use_raw=False,
+        dendrogram=True,
+        ax=ax,
+        show=False,
+    )
     fig.tight_layout()
     fig.savefig(figs_path / "dotplot_curated-list-markers.pdf")
 
@@ -822,8 +870,13 @@ def main():
 
     # top genes per sample and qc metrics
     pdf.add_page()
-    pdf.cell(page_w - 2 * margin_x, 2,
-             "Top Genes and QC metrics per sample after masking", align="C", new_y="NEXT")
+    pdf.cell(
+        page_w - 2 * margin_x,
+        2,
+        "Top Genes and QC metrics per sample after masking",
+        align="C",
+        new_y="NEXT",
+    )
     pdf.image(
         str(png_paths["top_genes_per_sample"]),
         x=margin_x,
@@ -848,14 +901,19 @@ def main():
 
     # UMAP details
     pdf.add_page()
-    pdf.cell(page_w - 2 * margin_x, 2,
-             "UMAPs per sample and clustering resolution", align="C", new_y="NEXT")
+    pdf.cell(
+        page_w - 2 * margin_x,
+        2,
+        "UMAPs per sample and clustering resolution",
+        align="C",
+        new_y="NEXT",
+    )
     pdf.image(
         str(png_paths["umap_samples"]),
         x=margin_x,
         y=margin_y + title_h,
         w=panel_w * 2,
-        h=panel_h
+        h=panel_h,
     )
     pdf.image(
         str(png_paths["umap_leiden_min_dist"]),
@@ -867,8 +925,13 @@ def main():
 
     # cell type annotation dotplots
     pdf.add_page()
-    pdf.cell(page_w - 2 * margin_x, 2,
-             "Cell type annotation dotplots", align="C", new_y="NEXT")
+    pdf.cell(
+        page_w - 2 * margin_x,
+        2,
+        "Cell type annotation dotplots",
+        align="C",
+        new_y="NEXT",
+    )
     pdf.image(
         str(png_paths["dotplot_celltype-panglao_top5-genes"]),
         x=margin_x,
@@ -886,8 +949,13 @@ def main():
 
     # custom cell type marker genes
     pdf.add_page()
-    pdf.cell(page_w - 2 * margin_x, 2,
-             "Scores for cell types of interest", align="C", new_y="NEXT")
+    pdf.cell(
+        page_w - 2 * margin_x,
+        2,
+        "Scores for cell types of interest",
+        align="C",
+        new_y="NEXT",
+    )
     pdf.image(
         str(png_paths["umap_curated-list_cell-expression"]),
         x=margin_x,
@@ -898,8 +966,13 @@ def main():
 
     # dotplot for custom markers
     pdf.add_page()
-    pdf.cell(page_w - 2 * margin_x, 2,
-             "Dotplot for curated list of marker genes", align="C", new_y="NEXT")
+    pdf.cell(
+        page_w - 2 * margin_x,
+        2,
+        "Dotplot for curated list of marker genes",
+        align="C",
+        new_y="NEXT",
+    )
     pdf.image(
         str(png_paths["dotplot_curated-list-markers"]),
         x=margin_x,
