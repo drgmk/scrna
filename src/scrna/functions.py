@@ -83,13 +83,15 @@ def get_plot_list(adata=None):
     return tmp
 
 
-def compute_qc_metrics(adata, extra_genes=[]):
+def compute_qc_metrics(adata, extra_lists={}, extra_genes=[]):
     """Calculate QC metrics for RNA data.
 
     Parameters
     ----------
     adata : AnnData
         Annotated data matrix containing RNA expression data.
+    extra_lists : dict, optional
+        Dictionary specifying additional lists of gene prefixes to calculate percent counts for.
     extra_genes : list, optional
         List of extra gene prefixes to calculate percent counts for.
     """
@@ -101,6 +103,8 @@ def compute_qc_metrics(adata, extra_genes=[]):
     }
     for g in extra_genes:
         pct_counts[g] = [g]
+    for k, v in extra_lists.items():
+        pct_counts[k] = v
 
     # convert everthing to lower case for matching
     for k, v in pct_counts.items():
@@ -240,6 +244,7 @@ def plot_gene_counts(
     order=None,
     show_masked=True,
     colour_by="pct_counts_in_top_1_genes",
+    vmax_pct=100,
     size_by="pct_counts_mt",
     poly_fits=None,
 ):
@@ -260,6 +265,8 @@ def plot_gene_counts(
         Whether to show the masked (filtered out) points in light grey.
     colour_by : str, optional
         Column name in `adata.obs` to use for coloring the points.
+    vmax_pct: float, optional
+        Maximum percentile to use for the color scale of `colour_by`. Default is 100 (no clipping).
     size_by : str, optional
         Column name in `adata.obs` to use for the size of the points.
     poly_fits : list of arrays, optional
@@ -273,11 +280,15 @@ def plot_gene_counts(
         order = adata.obs[hue].unique()
 
     vmax = (
-        np.max(adata[mask].obs[colour_by]) if colour_by in adata.obs.columns else None
+        np.percentile(adata[mask].obs[colour_by], vmax_pct)
+        if colour_by in adata.obs.columns
+        else None
     )
 
     nx, ny = plot_nxy(len(order))
     fig, ax = plt.subplots(ny, nx, sharey=True, sharex=True, figsize=(10, 7))
+    if nx == 1 and ny == 1:
+        ax = np.array([[ax]])
 
     # check on size_by, and rescale between 1 and 5
     sizes = adata.obs[size_by] / 4
@@ -319,11 +330,15 @@ def plot_gene_counts(
             x = np.linspace(
                 tmp.obs["total_counts"].min(), tmp.obs["total_counts"].max(), 100
             )
-            y = np.polyval(poly_fits[i], np.log10(x))
+            if len(poly_fits) == 1:
+                poly = poly_fits
+            else:
+                poly = poly_fits[i]
+            y = np.polyval(poly, np.log10(x))
             a.plot(x, 10**y, color="grey", linestyle="--")
 
     [a.set_visible(False) for a in ax.flatten()[i + 1 :]]
-    if ny == 1:
+    if ny == 1 and nx > 1:
         ax = ax[np.newaxis, :]
     ax[ny - 1, 0].set_ylabel("n_genes_by_counts")
     ax[ny - 1, 0].set_xlabel("total_counts")
@@ -361,6 +376,8 @@ def plot_top_genes(adata, hue="sample", n_top=10, order=None, figsize=(10, 7)):
         order = adata.obs[hue].unique()
     nx, ny = plot_nxy(len(order))
     fig, ax = plt.subplots(ny, nx, figsize=figsize, sharex=True, sharey=True)
+    if nx == 1 and ny == 1:
+        ax = np.array([[ax]])
     for i, s in enumerate(order):
         a = ax.flatten()[i]
         sc.pl.highest_expr_genes(
@@ -522,9 +539,10 @@ def normalisation_kernel_density_plot(adata, n_sample=500, ax=None, hue=None):
     x = np.linspace(0, 2.5, 100)
 
     if ax is None:
-        fig, ax = plt.subplots()
+        fig, ax_ = plt.subplots()
     else:
         fig = ax.figure
+        ax_ = ax
 
     # create colours for each sample
     if hue is not None and hue in adata.obs.columns:
@@ -545,7 +563,7 @@ def normalisation_kernel_density_plot(adata, n_sample=500, ax=None, hue=None):
         else:
             tmp = adata.X[i, :]
         kern = scipy.stats.gaussian_kde(tmp)
-        ax.plot(
+        ax_.plot(
             x,
             kern(x) + (0.2 * hue_offset[adata.obs[hue].iloc[i]] if hue_dict else 0),
             linewidth=1,
@@ -554,19 +572,19 @@ def normalisation_kernel_density_plot(adata, n_sample=500, ax=None, hue=None):
 
     if hue_dict is not None:
         for k in hue_offset.keys():
-            ax.text(
+            ax_.text(
                 2.4,
                 0.2 * hue_offset[k] + 0.05,
                 k,
                 color=hue_dict[k] if hue_dict else "black",
             )
-        ax.set_ylim(0, 1 + 0.2 * len(adata.obs[hue].unique()))
-    ax.set_xlabel("normalised expression")
+        ax_.set_ylim(0, 1 + 0.2 * len(adata.obs[hue].unique()))
+    ax_.set_xlabel("normalised expression")
     if ax is None:
         fig.tight_layout()
         return fig
     else:
-        return ax
+        return ax_
 
 
 def normalisation_check(adata, percentile=95, ax=None, hue=None, n_sample=None):

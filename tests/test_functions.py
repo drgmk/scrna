@@ -1,16 +1,18 @@
 import pytest
+import numpy as np
+import matplotlib.pyplot as plt
 import scanpy as sc
 import scrna.functions as scfunc
 from scrna.celltypemarkers import CellTypeMarkers
 
 
-@pytest.fixture(scope="module")
-def pbmc():
+@pytest.fixture(scope="module", params=[1, 2, 4, 6, 8, 12])
+def pbmc(request):
+    n_samples = request.param
     adata = sc.datasets.pbmc68k_reduced()
     # add some random sample group annotations for testing
-    adata.obs["sample"] = ["A"] * (adata.n_obs // 2) + ["B"] * (
-        adata.n_obs - adata.n_obs // 2
-    )
+    sample_strs = [f"Sample{i}" for i in range(n_samples)]
+    adata.obs["sample"] = np.random.choice(sample_strs, size=adata.n_obs)
     return adata
 
 
@@ -25,7 +27,7 @@ def test_do_qc(pbmc):
 
 
 def test_trim_outliers(pbmc):
-    mask = scfunc.trim_outliers(pbmc, x="n_genes_by_counts", y="total_counts")
+    mask, polys = scfunc.trim_outliers(pbmc, x="n_genes_by_counts", y="total_counts")
     assert len(mask) == len(pbmc.obs)
 
 
@@ -33,21 +35,25 @@ def test_plot_gene_counts(pbmc):
     scfunc.compute_qc_metrics(pbmc)
     fig = scfunc.plot_gene_counts(pbmc)
     assert fig is not None
+    plt.close(fig)
 
 
 def test_plot_top_genes(pbmc):
     fig = scfunc.plot_top_genes(pbmc)
     assert fig is not None
+    plt.close(fig)
 
 
 def test_plot_umaps(pbmc):
     fig = scfunc.plot_umaps(pbmc)
     assert fig is not None
+    plt.close(fig)
 
 
 def test_plot_cell_counts(pbmc):
     fig = scfunc.plot_cell_counts(pbmc, y="bulk_labels")
     assert fig is not None
+    plt.close(fig)
 
 
 def test__seurat_clr(pbmc):
@@ -64,6 +70,7 @@ def test_clr_normalize_each_cell(pbmc):
 def test_normalisation_kernel_density_plot(pbmc):
     fig = scfunc.normalisation_kernel_density_plot(pbmc)
     assert fig is not None
+    plt.close(fig)
 
 
 def test_normalisation_check(pbmc):
@@ -74,11 +81,13 @@ def test_normalisation_check(pbmc):
 def test_normalisation_plots(pbmc):
     fig = scfunc.normalisation_plots(pbmc, hue="sample")
     assert fig is not None
+    plt.close(fig)
 
 
 def test_pca_heatmap(pbmc):
     fig = scfunc.pca_heatmap(pbmc, component=0)
     assert fig is not None
+    plt.close(fig)
 
 
 def test_remove_doublet_clusters(pbmc):
@@ -133,8 +142,12 @@ def test_get_cell_cycle_genes(pbmc):
 
 def test_rank_genes_groups_to_df(pbmc):
     # Placeholder: test for rank_genes_groups_to_df
+    # skip when there's only one sample
+    if pbmc.obs["sample"].nunique() < 2:
+        pytest.skip("Skipping rank_genes_groups_to_df: need at least 2 samples")
+
     sc.tl.rank_genes_groups(
-        pbmc, groupby="sample", group="A", reference="B", method="t-test"
+        pbmc, groupby="sample", group="Sample0", reference="Sample1", method="t-test"
     )
     df = scfunc.rank_genes_groups_to_df(pbmc)
     assert df is not None
