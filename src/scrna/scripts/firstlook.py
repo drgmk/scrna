@@ -48,6 +48,7 @@ import scrna.functions as scfunc
 import sklearn.metrics
 import argparse
 import gc
+import logging
 
 from fpdf import FPDF
 from pdf2image import convert_from_path
@@ -72,6 +73,20 @@ def rna_pl(rna, also=[], n=20_000):
         return rna_pl, also_pl
     else:
         return rna_pl
+
+
+def obs_strings_to_categoricals(adata):
+    """Silently convert repeated string obs columns to categoricals."""
+    converted = []
+    for key in adata.obs.columns:
+        if pd.api.types.infer_dtype(adata.obs[key]) != "string":
+            continue
+        categorical = pd.Categorical(adata.obs[key])
+        if len(categorical.categories) >= adata.n_obs:
+            continue
+        adata.obs[key] = categorical
+        converted.append(key)
+    return converted
 
 
 def main():
@@ -209,8 +224,22 @@ def main():
     parser.add_argument(
         "--save", "-s", action="store_true", help="Save the processed AnnData object"
     )
+    parser.add_argument(
+        "--quiet",
+        "-q",
+        action="store_true",
+        help="Suppress progress output",
+    )
 
     args = parser.parse_args()
+
+    quiet = args.quiet
+
+    def log(message=""):
+        if not quiet:
+            print(message, flush=True)
+
+    logging.getLogger("matplotlib.category").setLevel(logging.WARNING)
 
     file_path = Path(args.file_path)
     if args.figs_path:
@@ -233,38 +262,49 @@ def main():
     save = args.save
 
     # Setup
+    log(f"Setting up output directory: {figs_path}")
     os.makedirs(figs_path, exist_ok=True)
 
     # Read in data
+    log(f"Reading: {file_path}")
     rna = scanpy.read_h5ad(file_path)
     rna.var_names_make_unique()
     rna.obs_names_make_unique()
-    print(f"reading: {file_path}")
-    print(rna)
+    log(rna)
 
     if use_raw:
+        log("Using raw counts from rna.raw.X")
         rna.X = rna.raw.X
     else:
         if "counts" in rna.layers:
+            log("Using counts layer")
             rna.X = rna.layers["counts"]
 
+    converted = obs_strings_to_categoricals(rna)
+    if converted:
+        log(f"Converted string obs columns to categorical: {', '.join(converted)}")
+
     # cut down the object to save memory
-    print(f"memory in original adata: {rna.__sizeof__() // 1_000_000} MB")
+    log(f"Memory in original adata: {rna.__sizeof__() // 1_000_000} MB")
+    log("Dropping extra layers/raw embeddings to reduce memory use")
     rna.layers = None
     rna.raw = None
     rna.obsm = None
     rna.varm = None
     rna.X = rna.X.astype(np.float32)
-    print(f"             cut down to: {rna.__sizeof__() // 1_000_000} MB")
+    log(f"Cut down to: {rna.__sizeof__() // 1_000_000} MB")
 
     # gpu helper, 4GB is about the limit for 16GB GPU (scrublet the bottleneck)
+    log("Selecting Scanpy backend")
     sc = scrna.scanpy_gpu_helper.pick_backend(force_cpu=args.use_cpu)
-    print(f"using backend: {'GPU' if sc.is_gpu else 'CPU'}")
+    log(f"Using backend: {'GPU' if sc.is_gpu else 'CPU'}")
     if args.mem_mgmt:
+        log("Enabling GPU memory management")
         sc.enable_memory_manager()
-    print(f"memory management enabled: {sc._memory_manager_enabled}")
+    log(f"Memory management enabled: {sc._memory_manager_enabled}")
 
     # sample details
+    log("Preparing sample metadata")
     if "sample_order" in rna.uns:
         sample_order = rna.uns["sample_order"]
     else:
@@ -288,10 +328,12 @@ def main():
                 sample_group_mapping[s] = g
 
     # Guess whether human or mouse
+    log("Guessing organism")
     organism = scfunc.guess_human_or_mouse(rna)
-    print(f"assuming organism: {organism}")
+    log(f"Assuming organism: {organism}")
 
     # compile/generate metrics table and plot
+    log("Compiling metrics table and overview plot")
     if "metrics_summary" in rna.uns:
         metrics = []
         # for s, df in rna.uns['metrics_summary'].items():
@@ -388,10 +430,12 @@ def main():
     rna.uns["meta_metrics_table"] = metrics_table
 
     # Quality control
+    log("Running quality-control filters and metrics")
     mask_cells, _ = scanpy.pp.filter_cells(rna, min_genes=min_genes, inplace=False)
     mask_genes, _ = scanpy.pp.filter_genes(rna, min_cells=min_cells, inplace=False)
     scfunc.compute_qc_metrics(rna)
 
+    log("Trimming QC outliers by sample")
     mask, polys = scfunc.trim_outliers(
         rna,
         groupby=sample_col,
@@ -404,6 +448,7 @@ def main():
         poly_order=2,
     )
 
+    log("Plotting gene counts per sample")
     rna_toplot, mask_toplot = rna_pl(rna, also=[mask])
     fig = scfunc.plot_gene_counts(
         rna_toplot,
@@ -416,20 +461,23 @@ def main():
     fig.savefig(str(figs_path / "gene_counts_per_sample.pdf"))
 
     # save and apply mask
+    log("Applying QC mask")
     rna.uns["meta_qc_mask_cells"] = mask
     rna.uns["meta_qc_mask_genes"] = mask_genes
     rna = rna[mask, mask_genes].copy()
 
-    print("After QC:")
-    print(rna)
+    log("After QC:")
+    log(rna)
 
     # Highest expressed genes
+    log("Plotting highest expressed genes")
     fig = scfunc.plot_top_genes(
         rna, n_top=10, hue="samp_no", order=sample_number_order, figsize=(20, 7)
     )
     fig.savefig(str(figs_path / "top_genes_per_sample.pdf"))
 
     # violins of metrics
+    log("Plotting QC metric violins")
     fig, ax = plt.subplots(1, 3, figsize=(20, 7 / 2))
     for a, p in zip(
         ax.flatten(), ["n_genes_by_counts", "total_counts", "pct_counts_in_top_1_genes"]
@@ -468,9 +516,11 @@ def main():
     fig.savefig(str(figs_path / "violin_qc_metrics_2.pdf"))
 
     # Doublets
+    log("Running scrublet doublet detection")
     sc.pp.scrublet(rna, batch_key=sample_col)
 
     # Cell cycle
+    log("Scoring cell cycle genes")
     cell_cycle_genes = scfunc.get_cell_cycle_genes(organism, gene_list=rna.var_names)
     sc.tl.score_genes_cell_cycle(
         rna,
@@ -481,27 +531,35 @@ def main():
     # process through to UMAP
 
     # normalised log1p for celltypist
+    log("Normalizing and log-transforming counts")
     sc.pp.normalize_total(rna, target_sum=1e4)
     sc.pp.log1p(rna)
     rna.layers["log1p_1e4"] = rna.X.copy()
     sc.to_cpu(rna, layer="log1p_1e4")
     # now scaled version for further processing
+    log("Scaling data and calculating highly variable genes")
     sc.pp.scale(rna, zero_center=args.zero_center, max_value=10)
     sc.pp.highly_variable_genes(rna)
+    log("Running PCA")
     sc.tl.pca(rna)
     # scanpy is going to ditch external, use harmonypy directly
     # sc.external.pp.harmony_integrate(rna, key=sample_col)
     pca_key = "X_pca"
     if integrate_col is not None:
+        log(f"Running Harmony integration using {integrate_col}")
         x = rna.obsm["X_pca"].astype(np.float64)
         harmony_out = harmonypy.run_harmony(x, rna.obs, integrate_col)
         rna.obsm["X_pca_harmony"] = harmony_out.Z_corr
         pca_key = "X_pca_harmony"
+    log("Building neighbour graph")
     sc.pp.neighbors(rna, n_neighbors=n_neighbours, use_rep=pca_key)
+    log("Running UMAP")
     sc.tl.umap(rna, min_dist=min_umap_dist, random_state=42, init_pos=umap_init_pos)
+    log("Running Leiden clustering")
     sc.tl.leiden(rna, resolution=leiden_res)
 
     # extra umaps with different min_dist
+    log("Running additional UMAP layouts")
     sc.tl.umap(
         rna,
         min_dist=min_umap_dist / 2,
@@ -516,6 +574,7 @@ def main():
     )
 
     # the expensive processing is largely done, free up GPU memory
+    log("Moving data to CPU and collecting memory")
     sc.to_cpu(rna)
     gc.collect()
 
@@ -523,6 +582,7 @@ def main():
     batch_s_original = []
     batch_s_corrected = []
     if integrate_col is not None:
+        log("Calculating batch correction silhouette metric")
         for s in rna.obs[integrate_col].unique():
             tmp = rna[rna.obs[integrate_col] == s].copy()
             # can't compute silhouette with only one cluster (e.g. small no. of cells)
@@ -541,12 +601,13 @@ def main():
 
         asw_original = np.mean(batch_s_original)
         asw_corrected = np.mean(batch_s_corrected)
-        print(f"ASW original: {asw_original:.4f}, ASW corrected: {asw_corrected:.4f}")
+        log(f"ASW original: {asw_original:.4f}, ASW corrected: {asw_corrected:.4f}")
 
     # fix this (again)
     rna.obs["samp_no"] = pd.Categorical(rna.obs["samp_no"])
 
     # sample dendrogram
+    log("Building sample dendrogram")
     sc.tl.dendrogram(rna, groupby="samp_no", use_rep=pca_key)
     fig, ax = plt.subplots(figsize=(5, 7 / 2))
     sc.pl.dendrogram(rna, groupby="samp_no", orientation="left", ax=ax, show=False)
@@ -555,6 +616,8 @@ def main():
     fig.savefig(str(figs_path / "sample_dendrogram.pdf"))
 
     # UMAPs overview
+    obs_strings_to_categoricals(rna)
+    log("Plotting UMAP overview")
     fig, ax = plt.subplots(2, 2, figsize=(10, 7))
     for i, x in enumerate(
         zip(
@@ -580,6 +643,7 @@ def main():
     fig.savefig(str(figs_path / "umap_overview.pdf"))
 
     # umaps with different min_dist
+    log("Plotting UMAP layouts with alternate min_dist values")
     fig, ax = plt.subplots(1, 2, figsize=(10, 3.5))
     for i, min_dist in enumerate(["half", "twice"]):
         sc.pl.embedding(
@@ -597,12 +661,14 @@ def main():
     fig.savefig(str(figs_path / f"umap_leiden_min_dist.pdf"))
 
     # UMAPS per sample
+    log("Plotting UMAPs per sample")
     fig = scfunc.plot_umaps(
         rna, hue="samp_no", order=sample_number_order, figsize=(10, 7 / 2)
     )
     fig.savefig(figs_path / "umap_samples.pdf")
 
     # cell types
+    log("Loading PanglaoDB markers")
     markers = dc.op.resource("PanglaoDB", organism=organism)
     markers = markers[
         markers[organism].astype(bool)
@@ -618,6 +684,7 @@ def main():
         }
     )
     markers = markers[["source", "target", "weight"]]
+    log("Scoring PanglaoDB marker activity")
     if sc._using_rsc:
         sc.to_gpu(rna)
         sc._rsc.dcg.ulm(rna, markers, verbose=False)
@@ -636,9 +703,14 @@ def main():
     rna.obs["celltype_panglao"] = pd.Categorical(rna.obs["leiden"].map(dict_ann))
 
     # celltypist, which expects log1p(norm(1e4))
+    log("Running CellTypist immune annotation")
     scfunc.celltypist_annotate_immune(rna, layer_key="log1p_1e4")
+    converted = obs_strings_to_categoricals(rna)
+    if converted:
+        log(f"Converted string obs columns to categorical: {', '.join(converted)}")
 
     # UMAPs cell types
+    log("Plotting cell type UMAPs")
     fig, ax = plt.subplots(2, 2, figsize=(10, 7))
     for i, x in enumerate(
         zip(
@@ -663,6 +735,7 @@ def main():
 
     # dotplots for annotated cell types
     # use logreg to get the top few
+    log("Plotting PanglaoDB cell type marker dotplot")
     fig, ax = plt.subplots(figsize=(20, 7))
     if rna.obs["celltype_panglao"].nunique() > 1:
         if sc._using_rsc:
@@ -684,6 +757,7 @@ def main():
         fig.tight_layout()
     fig.savefig(str(figs_path / "dotplot_celltype-panglao_top5-genes.pdf"))
 
+    log("Plotting immune subtype marker dotplot")
     fig, ax = plt.subplots(figsize=(20, 7))
     if rna.obs["subtypes_immune"].nunique() > 1:
         if sc._using_rsc:
@@ -707,10 +781,12 @@ def main():
 
     # expression using custom marker gene sets
     # load marker genes
+    log("Loading curated marker genes")
     markers = scrna.celltypemarkers.CellTypeMarkers(organism=organism)
-    markers.filter_genes(rna.var_names, verbose=True)
+    markers.filter_genes(rna.var_names, verbose=not quiet)
     markers_df = markers.to_pandas(include_secondary=False)
     # run decoupler ULM
+    log("Scoring curated marker gene sets")
     tmin = 1
     if sc._using_rsc:
         sc.to_gpu(rna)
@@ -718,7 +794,7 @@ def main():
             data=rna,
             net=markers_df.rename(columns={"cell_type": "source", "gene": "target"}),
             tmin=tmin,
-            verbose=True,
+            verbose=not quiet,
         )
         sc.to_cpu(rna)
     else:
@@ -726,9 +802,10 @@ def main():
             data=rna,
             net=markers_df.rename(columns={"cell_type": "source", "gene": "target"}),
             tmin=tmin,
-            verbose=True,
+            verbose=not quiet,
         )
 
+    log("Plotting curated marker gene UMAPs")
     score = dc.pp.get_obsm(rna, key="score_ulm")
     nx, ny = scfunc.plot_nxy(len(markers.data))
     fig, ax = plt.subplots(ny, nx, figsize=(20, 14), sharex=True, sharey=True)
@@ -741,6 +818,7 @@ def main():
     fig.savefig(figs_path / "umap_curated-list_cell-expression.pdf")
 
     # dotplot of above
+    log("Plotting curated marker dotplot")
     fig, ax = plt.subplots(figsize=(20, 7))
     sc.pl.dotplot(
         rna,
@@ -758,6 +836,7 @@ def main():
     #  - restore original data, subset, and put counts in a layer
     #  - save obsm and varm as .obsm['X_original'] and .varm['X_original']
     if save:
+        log("Saving processed AnnData object")
         rna_orig = sc.read_h5ad(file_path)
         rna_orig.var_names_make_unique()
         rna_orig.obs_names_make_unique()
@@ -775,6 +854,7 @@ def main():
         rna.write_h5ad(figs_path / f"{file_path.stem}_firstlook.h5ad")
 
     # Save metrics_table as an image
+    log("Exporting metrics table image")
     metrics_table_path = figs_path / "metrics_table.png"
     with open(metrics_table_path, "wb") as f:
         try:
@@ -817,10 +897,12 @@ def main():
     #         [(pdf_paths[k], png_paths[k]) for k in pdf_paths.keys()],
     #     )
     # convert one-by-one
+    log("Converting plot PDFs to PNGs for report")
     for k in pdf_paths.keys():
         pdf_to_png(pdf_paths[k], png_paths[k])
 
     # Create PDF report
+    log("Building PDF report")
     pdf = FPDF(orientation="L", unit="mm", format="A4")
     pdf.add_page()
 
@@ -1002,7 +1084,7 @@ def main():
 
     report_path = figs_path / "firstlook_report.pdf"
     pdf.output(str(report_path))
-    print(f"Report saved to {report_path}")
+    log(f"Report saved to {report_path}")
 
 
 if __name__ == "__main__":
