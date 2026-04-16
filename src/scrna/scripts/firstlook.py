@@ -87,6 +87,8 @@ def main():
     n_neighbours = 20
     leiden_res = 0.8
     min_umap_dist = 0.3
+    umap_init_pos = "spectral"
+    integrate_col = None
 
     parser = argparse.ArgumentParser(
         description="First look at single-cell RNA-seq data"
@@ -106,6 +108,12 @@ def main():
         default=sample_col,
         metavar=sample_col,
         help="Column name for independent samples",
+    )
+    parser.add_argument(
+        "--integrate",
+        action="store_true",
+        default=integrate_col,
+        help="Integrate by this obs column with harmonypy",
     )
     parser.add_argument(
         "--group_col",
@@ -173,6 +181,13 @@ def main():
         help="Minimum UMAP distance",
     )
     parser.add_argument(
+        "--umap_init_pos",
+        type=str,
+        default=umap_init_pos,
+        metavar=umap_init_pos,
+        help="UMAP initialization method (e.g. spectral or random)",
+    )
+    parser.add_argument(
         "--leiden_res",
         type=float,
         default=leiden_res,
@@ -203,6 +218,7 @@ def main():
     else:
         figs_path = file_path.parent / f"{file_path.stem}_firstlook"
     sample_col = args.sample_col
+    integrate_col = args.integrate
     group_col = args.group_col
     use_raw = args.use_raw
     max_mt_pct = args.max_mt_pct
@@ -213,6 +229,7 @@ def main():
     n_neighbours = args.n_neighbours
     leiden_res = args.leiden_res
     min_umap_dist = args.min_umap_dist
+    umap_init_pos = args.umap_init_pos
     save = args.save
 
     # Setup
@@ -474,11 +491,14 @@ def main():
     sc.tl.pca(rna)
     # scanpy is going to ditch external, use harmonypy directly
     # sc.external.pp.harmony_integrate(rna, key=sample_col)
-    x = rna.obsm["X_pca"].astype(np.float64)
-    harmony_out = harmonypy.run_harmony(x, rna.obs, sample_col)
-    rna.obsm["X_pca_harmony"] = harmony_out.Z_corr
-    sc.pp.neighbors(rna, n_neighbors=n_neighbours, use_rep="X_pca_harmony")
-    sc.tl.umap(rna, min_dist=min_umap_dist, random_state=42)
+    pca_key = "X_pca"
+    if integrate_col is not None:
+        x = rna.obsm["X_pca"].astype(np.float64)
+        harmony_out = harmonypy.run_harmony(x, rna.obs, integrate_col)
+        rna.obsm["X_pca_harmony"] = harmony_out.Z_corr
+        pca_key = "X_pca_harmony"
+    sc.pp.neighbors(rna, n_neighbors=n_neighbours, use_rep=pca_key)
+    sc.tl.umap(rna, min_dist=min_umap_dist, random_state=42, init_pos=umap_init_pos)
     sc.tl.leiden(rna, resolution=leiden_res)
 
     # extra umaps with different min_dist
@@ -499,37 +519,38 @@ def main():
     sc.to_cpu(rna)
     gc.collect()
 
-    # Batch correction metric
+    # Batch correction metric for integration
     batch_s_original = []
     batch_s_corrected = []
-    for s in sample_order:
-        tmp = rna[rna.obs[sample_col] == s].copy()
-        # can't compute silhouette with only one cluster (e.g. small no. of cells)
-        if len(tmp.obs["leiden"].unique()) < 2:
-            continue
-        scores = 1 - np.abs(
-            sklearn.metrics.silhouette_samples(tmp.obsm["X_pca"], tmp.obs["leiden"])
-        )
-        batch_s_original.append(scores.sum() / len(scores))
-        scores = 1 - np.abs(
-            sklearn.metrics.silhouette_samples(
-                tmp.obsm["X_pca_harmony"], tmp.obs["leiden"]
+    if integrate_col is not None:
+        for s in rna.obs[integrate_col].unique():
+            tmp = rna[rna.obs[integrate_col] == s].copy()
+            # can't compute silhouette with only one cluster (e.g. small no. of cells)
+            if len(tmp.obs["leiden"].unique()) < 2:
+                continue
+            scores = 1 - np.abs(
+                sklearn.metrics.silhouette_samples(tmp.obsm["X_pca"], tmp.obs["leiden"])
             )
-        )
-        batch_s_corrected.append(scores.sum() / len(scores))
+            batch_s_original.append(scores.sum() / len(scores))
+            scores = 1 - np.abs(
+                sklearn.metrics.silhouette_samples(
+                    tmp.obsm["X_pca_harmony"], tmp.obs["leiden"]
+                )
+            )
+            batch_s_corrected.append(scores.sum() / len(scores))
 
-    asw_original = np.mean(batch_s_original)
-    asw_corrected = np.mean(batch_s_corrected)
-    print(f"ASW original: {asw_original:.4f}, ASW corrected: {asw_corrected:.4f}")
+        asw_original = np.mean(batch_s_original)
+        asw_corrected = np.mean(batch_s_corrected)
+        print(f"ASW original: {asw_original:.4f}, ASW corrected: {asw_corrected:.4f}")
 
     # fix this (again)
     rna.obs["samp_no"] = pd.Categorical(rna.obs["samp_no"])
 
     # sample dendrogram
-    sc.tl.dendrogram(rna, groupby="samp_no", use_rep="X_pca_harmony")
+    sc.tl.dendrogram(rna, groupby="samp_no", use_rep=pca_key)
     fig, ax = plt.subplots(figsize=(5, 7 / 2))
     sc.pl.dendrogram(rna, groupby="samp_no", orientation="left", ax=ax, show=False)
-    fig.suptitle("Sample dendrogram (harmony PCA)")
+    fig.suptitle("Sample dendrogram")
     fig.tight_layout()
     fig.savefig(str(figs_path / "sample_dendrogram.pdf"))
 
@@ -554,9 +575,7 @@ def main():
             show=False,
         )
         if i == 0:
-            ax[i // 2, i % 2].set_title(
-                f"samp_no (batch ASW {asw_original:.3f} -> {asw_corrected:.3f})"
-            )
+            ax[i // 2, i % 2].set_title(f"samp_no")
     fig.tight_layout()
     fig.savefig(str(figs_path / "umap_overview.pdf"))
 
