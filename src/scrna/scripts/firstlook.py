@@ -75,6 +75,13 @@ def rna_pl(rna, also=[], n=20_000):
         return rna_pl
 
 
+def rna_pl_idx(rna, n=20_000):
+    """Return indices for a reusable plotting subset."""
+    if rna.n_obs > n:
+        return np.random.choice(rna.n_obs, size=n, replace=False)
+    return np.arange(rna.n_obs)
+
+
 def obs_strings_to_categoricals(adata):
     """Silently convert repeated string obs columns to categoricals."""
     converted = []
@@ -557,6 +564,7 @@ def main():
     sc.tl.umap(rna, min_dist=min_umap_dist, random_state=42, init_pos=umap_init_pos)
     log("Running Leiden clustering")
     sc.tl.leiden(rna, resolution=leiden_res)
+    log(f"  found {rna.obs['leiden'].nunique()} clusters at resolution {leiden_res}")
 
     # extra umaps with different min_dist
     log("Running additional UMAP layouts")
@@ -606,6 +614,10 @@ def main():
     # fix this (again)
     rna.obs["samp_no"] = pd.Categorical(rna.obs["samp_no"])
 
+    log("Selecting reusable plotting subset")
+    plot_idx = rna_pl_idx(rna)
+    rna_toplot = rna[plot_idx].copy()
+
     # sample dendrogram
     log("Building sample dendrogram")
     sc.tl.dendrogram(rna, groupby="samp_no", use_rep=pca_key)
@@ -630,7 +642,7 @@ def main():
         if vminmax:
             vmin, vmax = np.percentile(rna.obs[col], (1, 99))
         sc.pl.umap(
-            rna_pl(rna),
+            rna_toplot,
             color=col,
             vmin=vmin,
             vmax=vmax,
@@ -647,7 +659,7 @@ def main():
     fig, ax = plt.subplots(1, 2, figsize=(10, 3.5))
     for i, min_dist in enumerate(["half", "twice"]):
         sc.pl.embedding(
-            rna_pl(rna),
+            rna_toplot,
             f"X_umap_{min_dist}_{min_umap_dist}_",
             color="leiden",
             ax=ax[i],
@@ -708,6 +720,7 @@ def main():
     converted = obs_strings_to_categoricals(rna)
     if converted:
         log(f"Converted string obs columns to categorical: {', '.join(converted)}")
+    rna_toplot = rna[plot_idx].copy()
 
     # UMAPs cell types
     log("Plotting cell type UMAPs")
@@ -720,7 +733,7 @@ def main():
     ):
         col, show_legend = x
         scanpy.pl.umap(
-            rna_pl(rna),
+            rna_toplot,
             color=col,
             ncols=2,
             legend_loc="on data" if show_legend else True,
