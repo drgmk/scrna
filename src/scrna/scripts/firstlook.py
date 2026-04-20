@@ -822,7 +822,7 @@ def main():
                 n_genes=5,
                 method="logreg",
                 l1_ratio=1,
-                solver="liblinear",
+                solver="saga",
             )
         scanpy.pl.rank_genes_groups_dotplot(rna, n_genes=5, show=False, ax=ax)
         fig.tight_layout()

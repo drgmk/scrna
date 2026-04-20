@@ -39,6 +39,7 @@ dependencies = [
     "pdf2image",
     "dataframe-image",
     "harmonypy",
+    "scikit-image",
 ]
 
 [project.optional-dependencies]
