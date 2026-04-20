@@ -122,7 +122,7 @@ def main():
         "--figs_path",
         type=str,
         metavar="path/datafile/datafile_firstlook",
-        help="Path relative to the input file to save output figures",
+        help="Path relative to input to save output (absolute if starts with /)",
     )
     parser.add_argument(
         "--sample_col",
@@ -249,10 +249,14 @@ def main():
     logging.getLogger("matplotlib.category").setLevel(logging.WARNING)
 
     file_path = Path(args.file_path)
-    if args.figs_path:
-        figs_path = file_path.parent / args.figs_path
-    else:
+    # set figs_path, rel or abs depending on first character
+    if not args.figs_path:
         figs_path = file_path.parent / f"{file_path.stem}_firstlook"
+    elif args.figs_path[0] == "/":
+        figs_path = Path(args.figs_path)
+    else:
+        figs_path = file_path.parent / args.figs_path
+
     sample_col = args.sample_col
     integrate_col = args.integrate_col
     group_col = args.group_col
@@ -632,6 +636,7 @@ def main():
 
     # fix this (again)
     rna.obs["samp_no"] = pd.Categorical(rna.obs["samp_no"])
+    obs_strings_to_categoricals(rna)
 
     log("Selecting reusable plotting subset")
     plot_idx = rna_pl_idx(rna)
@@ -659,7 +664,6 @@ def main():
     fig.savefig(str(figs_path / "pca_overview.pdf"))
 
     # UMAPs overview
-    obs_strings_to_categoricals(rna)
     log("Plotting UMAP overview")
     fig, ax = plt.subplots(2, 2, figsize=(10, 7))
     for i, x in enumerate(
@@ -747,7 +751,7 @@ def main():
 
     # celltypist, which expects log1p(norm(1e4))
     log("Running CellTypist immune annotation")
-    scfunc.celltypist_annotate_immune(rna, layer_key="log1p_1e4")
+    scfunc.celltypist_annotate_immune(rna, layer_key="log1p_1e4", use_GPU=sc._using_rsc)
     converted = obs_strings_to_categoricals(rna)
     if converted:
         log(f"Converted string obs columns to categorical: {', '.join(converted)}")
@@ -792,10 +796,11 @@ def main():
             scanpy.tl.rank_genes_groups(
                 rna,
                 groupby="celltype_panglao",
+                reference="rest",
                 n_genes=5,
                 method="logreg",
                 l1_ratio=1,
-                solver="liblinear",
+                solver="saga",
             )
         scanpy.pl.rank_genes_groups_dotplot(rna, n_genes=5, show=False, ax=ax)
         fig.tight_layout()
