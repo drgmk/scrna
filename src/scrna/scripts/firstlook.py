@@ -132,8 +132,8 @@ def main():
         help="Column name for independent samples",
     )
     parser.add_argument(
-        "--integrate",
-        action="store_true",
+        "--integrate_col",
+        type=str,
         default=integrate_col,
         help="Integrate by this obs column with harmonypy",
     )
@@ -254,7 +254,7 @@ def main():
     else:
         figs_path = file_path.parent / f"{file_path.stem}_firstlook"
     sample_col = args.sample_col
-    integrate_col = args.integrate
+    integrate_col = args.integrate_col
     group_col = args.group_col
     use_raw = args.use_raw
     max_mt_pct = args.max_mt_pct
@@ -543,10 +543,12 @@ def main():
     sc.pp.log1p(rna)
     rna.layers["log1p_1e4"] = rna.X.copy()
     sc.to_cpu(rna, layer="log1p_1e4")
-    # now scaled version for further processing
-    log("Scaling data and calculating highly variable genes")
-    sc.pp.scale(rna, zero_center=args.zero_center, max_value=10)
+
+    log("Calculating highly variable genes")
     sc.pp.highly_variable_genes(rna)
+    log(f"  found {rna.var['highly_variable'].sum()} highly variable genes")
+    log(f"Scaling data (zero_center={args.zero_center}, max_value=10)")
+    sc.pp.scale(rna, zero_center=args.zero_center, max_value=10)
     log("Running PCA")
     sc.tl.pca(rna)
     # scanpy is going to ditch external, use harmonypy directly
@@ -565,6 +567,23 @@ def main():
     log("Running Leiden clustering")
     sc.tl.leiden(rna, resolution=leiden_res)
     log(f"  found {rna.obs['leiden'].nunique()} clusters at resolution {leiden_res}")
+
+    if not quiet:
+        log("Analyzing neighbor graph connectivity")
+        from scipy.sparse.csgraph import connected_components
+
+        conn = rna.obsp["connectivities"]
+        n_components, component_labels = connected_components(conn, directed=False)
+
+        cluster_sizes = rna.obs["leiden"].value_counts()
+        log(f"  neighbor graph components: {n_components}")
+        log(f"  connectivities nnz/cell: {conn.getnnz(axis=1).mean():.1f} mean")
+        log(
+            "  cluster sizes: "
+            f"min={cluster_sizes.min()}, "
+            f"median={cluster_sizes.median():.0f}, "
+            f"max={cluster_sizes.max()}"
+        )
 
     # extra umaps with different min_dist
     log("Running additional UMAP layouts")
@@ -626,6 +645,18 @@ def main():
     fig.suptitle("Sample dendrogram")
     fig.tight_layout()
     fig.savefig(str(figs_path / "sample_dendrogram.pdf"))
+
+    # first few PCA components
+    log("Plotting PCA overview")
+    fig = sc.pl.pca(
+        rna_toplot,
+        components=["1,2", "2,3", "3,4"],
+        color="samp_no",
+        show=False,
+        return_fig=True,
+    )
+    fig.tight_layout()
+    fig.savefig(str(figs_path / "pca_overview.pdf"))
 
     # UMAPs overview
     obs_strings_to_categoricals(rna)
