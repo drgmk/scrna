@@ -751,7 +751,9 @@ def main():
 
     # celltypist, which expects log1p(norm(1e4))
     log("Running CellTypist immune annotation")
-    scfunc.celltypist_annotate_immune(rna, layer_key="log1p_1e4", use_GPU=sc._using_rsc)
+    scfunc.celltypist_annotate_immune(
+        rna, layer_key="log1p_1e4"
+    )  # , use_GPU=sc._using_rsc)
     converted = obs_strings_to_categoricals(rna)
     if converted:
         log(f"Converted string obs columns to categorical: {', '.join(converted)}")
