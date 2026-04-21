@@ -1232,45 +1232,39 @@ def dc_collectri_tfs(
     return tf_acts_, tf_padj
 
 
-def celltypist_annotate_immune(adata, recluster=False, use_GPU=False, layer_key=None):
+def celltypist_annotate_immune(adata, use_GPU=False, layer_key=None):
     """Quick annotation of cell types using CellTypist.
 
     Parameters
     ----------
     adata : AnnData
         The RNA data.
-    recluster : bool, optional
-        Whether to recluster the data before annotation (default is False).
     use_GPU : bool, optional
         Whether to use GPU for CellTypist annotation (default is False).
     layer_key : str, optional
         The layer key to use for expression data (default is None, which uses adata.X).
     """
-    if recluster:
-        sc.pp.highly_variable_genes(adata)
-        sc.tl.pca(adata)
-        sc.pp.neighbors(adata, n_neighbors=20)
-        sc.tl.umap(adata)
-        sc.tl.leiden(adata, resolution=0.8)
 
+    # create a lighter anndata, but keeping connectivities
     if layer_key is not None and layer_key in adata.layers.keys():
         rna_tmp = ad.AnnData(
-            X=adata.layers[layer_key].copy(),
-            obs=adata.obs.copy(),
-            var=adata.var.copy(),
+            X=adata.layers[layer_key],
         )
     else:
         rna_tmp = ad.AnnData(
-            X=adata.X.copy(),
-            obs=adata.obs.copy(),
-            var=adata.var.copy(),
+            X=adata.X,
+            obsp=adata.obsp,
         )
+
+    rna_tmp.obs_names = adata.obs_names
+    rna_tmp.var_names = adata.var_names
+    rna_tmp.uns["neighbors"] = adata.uns["neighbors"]
+    rna_tmp.obsp = adata.obsp
 
     # rna_tmp = adata.copy()
     # use specified layer if available
     # if layer_key is not None and layer_key in rna_tmp.layers.keys():
-    #     rna_tmp.X = rna_tmp.layers[layer_key]
-    #     rna_tmp.layers[layer_key] = None
+    # rna_tmp.X = rna_tmp.layers[layer_key]
 
     models = ["Immune_All_Low.pkl", "Immune_All_High.pkl"]
     organism = guess_human_or_mouse(rna_tmp)
@@ -1288,22 +1282,31 @@ def celltypist_annotate_immune(adata, recluster=False, use_GPU=False, layer_key=
     predictions_maintypes = celltypist.annotate(
         rna_tmp, model=models[1], majority_voting=True, use_GPU=use_GPU
     )
-    rna_tmp = predictions_maintypes.to_adata(prefix="maintypes_")
-    rna_tmp.obs = rna_tmp.obs[
-        [col for col in rna_tmp.obs.columns if col.startswith("maintypes_")]
-    ]
-    adata.obsm["celltypist_maintypes"] = rna_tmp.obs.copy()
-    adata.obs["maintypes_immune"] = rna_tmp.obs["maintypes_majority_voting"]
+    adata.obs["maintypes_immune"] = predictions_maintypes.predicted_labels[
+        "majority_voting"
+    ].copy()
+    adata.obsm["celltypist_maintypes"] = predictions_maintypes.predicted_labels.copy()
+    # rna_tmp = predictions_maintypes.to_adata(prefix="maintypes_")
+    # rna_tmp.obs = rna_tmp.obs[
+    #     [col for col in rna_tmp.obs.columns if col.startswith("maintypes_")]
+    # ]
+    # adata.obsm["celltypist_maintypes"] = rna_tmp.obs.copy()
+    # adata.obs["maintypes_immune"] = rna_tmp.obs["maintypes_majority_voting"]
 
     predictions_subtypes = celltypist.annotate(
         rna_tmp, model=models[0], majority_voting=True, use_GPU=use_GPU
     )
-    rna_tmp = predictions_subtypes.to_adata(prefix="subtypes_")
-    rna_tmp.obs = rna_tmp.obs[
-        [col for col in rna_tmp.obs.columns if col.startswith("subtypes_")]
-    ]
-    adata.obsm["celltypist_subtypes"] = rna_tmp.obs.copy()
-    adata.obs["subtypes_immune"] = rna_tmp.obs["subtypes_majority_voting"]
+    adata.obs["subtypes_immune"] = predictions_subtypes.predicted_labels[
+        "majority_voting"
+    ].copy()
+    adata.obsm["celltypist_subtypes"] = predictions_subtypes.predicted_labels.copy()
+
+    # rna_tmp = predictions_subtypes.to_adata(prefix="subtypes_")
+    # rna_tmp.obs = rna_tmp.obs[
+    #     [col for col in rna_tmp.obs.columns if col.startswith("subtypes_")]
+    # ]
+    # adata.obsm["celltypist_subtypes"] = rna_tmp.obs.copy()
+    # adata.obs["subtypes_immune"] = rna_tmp.obs["subtypes_majority_voting"]
 
     # for col in rna_tmp.obs.columns:
     #     if col.startswith("subtypes_") or col.startswith("maintypes_"):

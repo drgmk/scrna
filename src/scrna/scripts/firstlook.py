@@ -59,7 +59,7 @@ import scrna
 
 
 # subsampled rna (and vectors in also) for plotting
-def rna_pl(rna, also=[], n=20_000):
+def rna_pl(rna, also=[], n=5_000):
     """Subset rna (and vectors in also) to len(n) for plotting."""
     if rna.n_obs > n:
         keep = np.random.choice(rna.n_obs, size=n, replace=False)
@@ -75,7 +75,7 @@ def rna_pl(rna, also=[], n=20_000):
         return rna_pl
 
 
-def rna_pl_idx(rna, n=20_000):
+def rna_pl_idx(rna, n=5_000):
     """Return indices for a reusable plotting subset."""
     if rna.n_obs > n:
         return np.random.choice(rna.n_obs, size=n, replace=False)
