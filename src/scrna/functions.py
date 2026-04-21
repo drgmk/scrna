@@ -1253,10 +1253,24 @@ def celltypist_annotate_immune(adata, recluster=False, use_GPU=False, layer_key=
         sc.tl.umap(adata)
         sc.tl.leiden(adata, resolution=0.8)
 
-    rna_tmp = adata.copy()
+    if layer_key is not None and layer_key in adata.layers.keys():
+        rna_tmp = ad.AnnData(
+            X=adata.layers[layer_key].copy(),
+            obs=adata.obs.copy(),
+            var=adata.var.copy(),
+        )
+    else:
+        rna_tmp = ad.AnnData(
+            X=adata.X.copy(),
+            obs=adata.obs.copy(),
+            var=adata.var.copy(),
+        )
+
+    # rna_tmp = adata.copy()
     # use specified layer if available
-    if layer_key is not None and layer_key in rna_tmp.layers.keys():
-        rna_tmp.X = rna_tmp.layers[layer_key]
+    # if layer_key is not None and layer_key in rna_tmp.layers.keys():
+    #     rna_tmp.X = rna_tmp.layers[layer_key]
+    #     rna_tmp.layers[layer_key] = None
 
     models = ["Immune_All_Low.pkl", "Immune_All_High.pkl"]
     organism = guess_human_or_mouse(rna_tmp)
