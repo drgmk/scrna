@@ -40,6 +40,7 @@ dependencies = [
     "dataframe-image",
     "harmonypy",
     "scikit-image",
+    "scib_metrics",
 ]
 
 [project.optional-dependencies]

@@ -42,6 +42,7 @@ import pandas as pd
 import scanpy
 import harmonypy
 import decoupler as dc
+import scib_metrics
 import seaborn as sns
 import matplotlib.pyplot as plt
 import scrna.functions as scfunc
@@ -610,29 +611,15 @@ def main():
     gc.collect()
 
     # Batch correction metric for integration
-    batch_s_original = []
-    batch_s_corrected = []
     if integrate_col is not None:
         log("Calculating batch correction silhouette metric")
-        for s in rna.obs[integrate_col].unique():
-            tmp = rna[rna.obs[integrate_col] == s].copy()
-            # can't compute silhouette with only one cluster (e.g. small no. of cells)
-            if len(tmp.obs["leiden"].unique()) < 2:
-                continue
-            scores = 1 - np.abs(
-                sklearn.metrics.silhouette_samples(tmp.obsm["X_pca"], tmp.obs["leiden"])
-            )
-            batch_s_original.append(scores.sum() / len(scores))
-            scores = 1 - np.abs(
-                sklearn.metrics.silhouette_samples(
-                    tmp.obsm["X_pca_harmony"], tmp.obs["leiden"]
-                )
-            )
-            batch_s_corrected.append(scores.sum() / len(scores))
-
-        asw_original = np.mean(batch_s_original)
-        asw_corrected = np.mean(batch_s_corrected)
-        log(f"ASW original: {asw_original:.4f}, ASW corrected: {asw_corrected:.4f}")
+        bras_original = scib_metrics.bras(rna.obsm['X_pca'],
+                                          rna.obs['leiden'],
+                                          rna.obs[integrate_col])
+        bras_corrected = scib_metrics.bras(rna.obsm['X_pca_harmony'],
+                                          rna.obs['leiden'],
+                                          rna.obs[integrate_col])
+        log(f"BRAS original: {bras_original:.4f}, BRAS corrected: {bras_corrected:.4f}")
 
     # fix this (again)
     rna.obs["samp_no"] = pd.Categorical(rna.obs["samp_no"])
@@ -653,15 +640,34 @@ def main():
 
     # first few PCA components
     log("Plotting PCA overview")
-    fig = sc.pl.pca(
-        rna_toplot,
-        components=["1,2", "2,3", "3,4"],
-        color="samp_no",
-        show=False,
-        return_fig=True,
-    )
+    fig, ax = plt.subplots(1, 3, figsize=(10, 7 / 2))
+    for i, comp in enumerate(["1,2", "2,3", "3,4"]):
+        sc.pl.embedding(
+            rna_toplot,
+            basis=f"X_pca",
+            components=comp,
+            color="samp_no",
+            ax=ax[i],
+            show=False,
+        )
+    fig.suptitle(f'BRAS: {bras_original:.4f}')
     fig.tight_layout()
-    fig.savefig(str(figs_path / "pca_overview.pdf"))
+    fig.savefig(str(figs_path / "pca_raw.pdf"))
+
+    if integrate_col is not None:
+        fig, ax = plt.subplots(1, 3, figsize=(10, 7 / 2))
+        for i, comp in enumerate(["1,2", "2,3", "3,4"]):
+            sc.pl.embedding(
+                rna_toplot,
+                basis=f"X_pca_harmony",
+                components=comp,
+                color="samp_no",
+                ax=ax[i],
+                show=False,
+            )
+        fig.suptitle(f'BRAS: {bras_corrected:.4f}')
+        fig.tight_layout()
+        fig.savefig(str(figs_path / "pca_harmony.pdf"))
 
     # UMAPs overview
     log("Plotting UMAP overview")
@@ -783,7 +789,7 @@ def main():
 
     # dotplots for annotated cell types
     # use logreg to get the top few
-    log("Plotting PanglaoDB cell type marker dotplot")
+    log("Ranking and plotting PanglaoDB cell type marker dotplot")
     fig, ax = plt.subplots(figsize=(20, 7))
     if rna.obs["celltype_panglao"].nunique() > 1:
         if sc._using_rsc:
@@ -919,6 +925,7 @@ def main():
         "violin_qc_metrics_1",
         "violin_qc_metrics_2",
         "sample_dendrogram",
+        "pca_raw",
         "umap_overview",
         "dotplot_celltype-panglao_top5-genes",
         "dotplot_celltype-immune_top5-genes",
@@ -928,6 +935,9 @@ def main():
         "umap_curated-list_cell-expression",
         "dotplot_curated-list-markers",
     ]
+    if integrate_col is not None:
+        pdfs = pdfs + ["pca_harmony"]
+
     pdf_paths = {}
     png_paths = {}
     for pdf in pdfs:
@@ -1072,6 +1082,21 @@ def main():
         w=panel_w,
         h=panel_h / 2,
     )
+    pdf.image(
+        str(png_paths["pca_raw"]),
+        x=margin_x + panel_w,
+        y=margin_y + title_h + panel_h,
+        w=panel_w,
+        h=panel_h / 2,
+    )
+    if integrate_col is not None:
+        pdf.image(
+            str(png_paths["pca_harmony"]),
+            x=margin_x + panel_w,
+            y=margin_y + title_h + panel_h * 1.5,
+            w=panel_w,
+            h=panel_h / 2,
+        )
 
     # cell type annotation dotplots
     pdf.add_page()

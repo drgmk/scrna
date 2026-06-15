@@ -901,7 +901,7 @@ def get_vmax(adata, markers, percentile=95, min_vmax=0.1):
     vmax = [
         np.percentile(
             adata[:, adata.var_names.isin([g])].X.toarray(), percentile, axis=0
-        )
+        )[0]
         for g in markers
     ]
     vmax = [v if v > min_vmax else min_vmax for v in vmax]
