@@ -716,7 +716,7 @@ def main():
     # UMAPS per sample
     log("Plotting UMAPs per sample")
     fig = scfunc.plot_umaps(
-        rna, hue="samp_no", order=sample_number_order, figsize=(10, 7 / 2)
+        rna, hue="samp_no", order=sample_number_order, color='leiden', figsize=(10, 7 / 2)
     )
     fig.savefig(figs_path / "umap_samples.pdf")
 

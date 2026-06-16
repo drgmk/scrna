@@ -390,7 +390,7 @@ def plot_top_genes(adata, hue="sample", n_top=10, order=None, figsize=(10, 7)):
     return fig
 
 
-def plot_umaps(adata, hue="sample", order=None, figsize=(15, 10.5)):
+def plot_umaps(adata, hue="sample", color=None, order=None, figsize=(15, 10.5)):
     """Plot UMAPs for each sample and for all samples combined.
 
     Parameters
@@ -408,7 +408,7 @@ def plot_umaps(adata, hue="sample", order=None, figsize=(15, 10.5)):
     fig, ax = plt.subplots(ny, nx, figsize=figsize, sharex=True, sharey=True)
     for i, s in enumerate(order):
         a = ax.flatten()[i]
-        sc.pl.umap(adata[adata.obs[hue] == s], ax=a, show=False, size=10)
+        sc.pl.umap(adata[adata.obs[hue] == s], color=color, ax=a, show=False, size=10, legend_loc=None)
         # remove x/y labels from all but bottom left
         if i % nx != 0:
             a.set_ylabel("")
@@ -416,7 +416,7 @@ def plot_umaps(adata, hue="sample", order=None, figsize=(15, 10.5)):
             a.set_xlabel("")
         a.set_title(s)
 
-    sc.pl.umap(adata, ax=ax.flatten()[-1], show=False, size=10)
+    sc.pl.umap(adata, color=color, ax=ax.flatten()[-1], show=False, size=10, legend_loc=None)
     ax.flatten()[-1].set_ylabel("")
     ax.flatten()[-1].set_title("all")
     fig.tight_layout()
