@@ -611,15 +611,17 @@ def main():
     gc.collect()
 
     # Batch correction metric for integration
+    log("Calculating batch correction silhouette metric")
+    bras_original = scib_metrics.bras(rna.obsm['X_pca'],
+                                      rna.obs['leiden'],
+                                      rna.obs[integrate_col])
     if integrate_col is not None:
-        log("Calculating batch correction silhouette metric")
-        bras_original = scib_metrics.bras(rna.obsm['X_pca'],
-                                          rna.obs['leiden'],
-                                          rna.obs[integrate_col])
         bras_corrected = scib_metrics.bras(rna.obsm['X_pca_harmony'],
-                                          rna.obs['leiden'],
-                                          rna.obs[integrate_col])
+                                           rna.obs['leiden'],
+                                           rna.obs[integrate_col])
         log(f"BRAS original: {bras_original:.4f}, BRAS corrected: {bras_corrected:.4f}")
+    else:
+        log(f"BRAS original: {bras_original:.4f}")
 
     # fix this (again)
     rna.obs["samp_no"] = pd.Categorical(rna.obs["samp_no"])
