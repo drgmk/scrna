@@ -359,7 +359,7 @@ def main():
     # allow for gene names to be in a different column
     if gene_col is not None:
         log(f"Using gene identifiers from column: {gene_col}")
-        rna.var_names = rna.var[gene_col]
+        rna.var_names = rna.var[gene_col].astype(str)
         rna.var_names_make_unique()
 
     # compile/generate metrics table and plot
