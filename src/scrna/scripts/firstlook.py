@@ -279,7 +279,12 @@ def main():
 
     # Read in data
     log(f"Reading: {file_path}")
-    rna = scanpy.read_h5ad(file_path)
+    if file_path.suffix == ".h5ad":
+        rna = scanpy.read_h5ad(file_path)
+    elif file_path.suffix == ".h5":
+        rna = scanpy.read_10x_h5(file_path)
+    else:
+        raise ValueError(f"Unknown file type: {file_path.suffix}")
     rna.var_names_make_unique()
     rna.obs_names_make_unique()
     log(rna)
