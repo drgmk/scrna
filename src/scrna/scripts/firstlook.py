@@ -126,6 +126,12 @@ def main():
         help="Path relative to input to save output (absolute if starts with /)",
     )
     parser.add_argument(
+        "--gene_col",
+        type=str,
+        default=None,
+        help="Column name for gene identifiers if not index",
+    )
+    parser.add_argument(
         "--sample_col",
         type=str,
         default=sample_col,
@@ -258,6 +264,7 @@ def main():
     else:
         figs_path = file_path.parent / args.figs_path
 
+    gene_col = args.gene_col
     sample_col = args.sample_col
     integrate_col = args.integrate_col
     group_col = args.group_col
@@ -348,6 +355,12 @@ def main():
     log("Guessing organism")
     organism = scfunc.guess_human_or_mouse(rna)
     log(f"Assuming organism: {organism}")
+
+    # allow for gene names to be in a different column
+    if gene_col is not None:
+        log(f"Using gene identifiers from column: {gene_col}")
+        rna.var_names = rna.var[gene_col]
+        rna.var_names_make_unique()
 
     # compile/generate metrics table and plot
     log("Compiling metrics table and overview plot")
