@@ -169,3 +169,83 @@ def test_celltypist_annotate_immune(pbmc):
     # Placeholder: test for celltypist_annotate_immune
     # Not trivial to test without celltypist model
     assert True
+
+
+@pytest.fixture(scope="module")
+def counts_adata():
+    """Synthetic AnnData with known raw counts in .X (sparse)."""
+    import anndata as ad
+    import scipy.sparse
+
+    rng = np.random.default_rng(0)
+    # sparse-ish non-negative integer counts, varied library sizes
+    counts = rng.poisson(0.5, size=(300, 200)).astype(np.float32)
+    adata = ad.AnnData(X=scipy.sparse.csr_matrix(counts))
+    return adata
+
+
+def test_guess_data_type_counts(counts_adata):
+    res = scfunc.guess_data_type(counts_adata)
+    assert res["kind"] == "counts"
+
+
+def test_guess_data_type_log1p_cp10k(counts_adata):
+    adata = counts_adata.copy()
+    sc.pp.normalize_total(adata, target_sum=1e4)
+    sc.pp.log1p(adata)
+    res = scfunc.guess_data_type(adata)
+    assert res["kind"] == "log1p_normalised"
+    assert res["target_sum"] == pytest.approx(1e4, rel=0.05)
+
+
+def test_guess_data_type_log1p_cpm(counts_adata):
+    adata = counts_adata.copy()
+    sc.pp.normalize_total(adata, target_sum=1e6)
+    sc.pp.log1p(adata)
+    res = scfunc.guess_data_type(adata)
+    assert res["kind"] == "log1p_normalised"
+    assert res["target_sum"] == pytest.approx(1e6, rel=0.05)
+
+
+def test_guess_data_type_log1p_median_default(counts_adata):
+    # scanpy default: target_sum=None normalises to the median library size
+    adata = counts_adata.copy()
+    sc.pp.normalize_total(adata)
+    sc.pp.log1p(adata)
+    res = scfunc.guess_data_type(adata)
+    assert res["kind"] == "log1p_normalised"
+    assert res["target_sum"] is not None
+
+
+def test_guess_data_type_normalised_not_logged(counts_adata):
+    adata = counts_adata.copy()
+    sc.pp.normalize_total(adata, target_sum=1e4)
+    res = scfunc.guess_data_type(adata)
+    assert res["kind"] == "normalised"
+    assert res["target_sum"] == pytest.approx(1e4, rel=0.05)
+
+
+def test_guess_data_type_log1p_counts(counts_adata):
+    adata = counts_adata.copy()
+    sc.pp.log1p(adata)  # log1p of raw counts, no normalisation
+    res = scfunc.guess_data_type(adata)
+    assert res["kind"] == "log1p_counts"
+
+
+def test_guess_data_type_scaled(counts_adata):
+    adata = counts_adata.copy()
+    sc.pp.normalize_total(adata, target_sum=1e4)
+    sc.pp.log1p(adata)
+    sc.pp.scale(adata)  # introduces negative values
+    res = scfunc.guess_data_type(adata)
+    assert res["kind"] == "scaled"
+
+
+def test_guess_data_type_layer(counts_adata):
+    # data should be findable via the layer arg, independent of .X
+    adata = counts_adata.copy()
+    adata.layers["counts"] = adata.X.copy()
+    sc.pp.normalize_total(adata, target_sum=1e4)
+    sc.pp.log1p(adata)
+    assert scfunc.guess_data_type(adata)["kind"] == "log1p_normalised"
+    assert scfunc.guess_data_type(adata, layer="counts")["kind"] == "counts"

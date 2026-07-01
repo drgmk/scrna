@@ -353,7 +353,7 @@ def main():
 
     # Guess whether human or mouse
     log("Guessing organism")
-    organism = scfunc.guess_human_or_mouse(rna)
+    organism = scfunc.guess_human_or_mouse(rna, column=gene_col if gene_col is not None else None)
     log(f"Assuming organism: {organism}")
 
     # allow for gene names to be in a different column

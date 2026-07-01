@@ -38,17 +38,179 @@ def plot_nxy(n):
     return x, y
 
 
-def guess_human_or_mouse(adata):
+def guess_data_type(adata, layer=None, n_sample=1000, tol=0.01, const_tol=0.02):
+    """Guess what kind of values are stored in ``adata.X`` (or a layer).
+
+    Distinguishes raw counts from log1p-of-normalised data, and for the
+    normalised cases tries to identify the target sum used
+    (counts-per-10k, counts-per-1M, or scanpy's default median-count
+    normalisation). Also flags z-scored ("scaled") data, which contains
+    negative values.
+
+    The logic is:
+
+    - negative values           -> ``"scaled"`` (e.g. ``sc.pp.scale``)
+    - non-negative integers      -> ``"counts"``
+    - small non-integer values, constant library size after undoing log1p
+      -> ``"log1p_normalised"`` (target sum reported)
+    - small non-integer values that are log1p of integers
+      -> ``"log1p_counts"``
+    - large non-integer values with constant library size
+      -> ``"normalised"`` (normalised but not logged)
+    - anything else              -> ``"unknown"``
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data matrix.
+    layer : str, optional
+        If given, inspect ``adata.layers[layer]`` instead of ``adata.X``.
+    n_sample : int, optional
+        Number of cells (rows) to randomly subsample for the check. Default 1000.
+    tol : float, optional
+        Absolute tolerance used when testing whether values are integers.
+    const_tol : float, optional
+        Relative tolerance (coefficient of variation) used when deciding
+        whether per-cell library sizes are constant.
+
+    Returns
+    -------
+    dict
+        With keys ``'kind'``, ``'target_sum'`` (float or None) and
+        ``'details'`` (human-readable explanation).
+    """
+
+    X = adata.layers[layer] if layer is not None else adata.X
+
+    # subsample rows for speed on large matrices
+    n_cells = X.shape[0]
+    if n_sample is not None and n_sample < n_cells:
+        idx = np.sort(np.random.choice(n_cells, n_sample, replace=False))
+        X = X[idx, :]
+
+    if scipy.sparse.issparse(X):
+        X = X.tocsr()
+        data = X.data
+        row_sums = np.asarray(X.sum(axis=1)).ravel()
+    else:
+        X = np.asarray(X)
+        data = X.ravel()
+        row_sums = X.sum(axis=1)
+
+    if data.size == 0:
+        return {"kind": "unknown", "target_sum": None, "details": "empty matrix"}
+
+    vmin = float(data.min())
+    vmax = float(data.max())
+
+    def _const_target(sums):
+        """Return the common library size if constant across cells, else None."""
+        med = np.median(sums)
+        if not np.isfinite(med) or med <= 0:
+            return None
+        if np.std(sums) <= const_tol * med:
+            return float(med)
+        return None
+
+    def _label_target(t):
+        for known, name in [(1e4, "per 10k (CP10K)"), (1e6, "per 1M (CPM)")]:
+            if abs(t - known) <= 0.05 * known:
+                return name
+        return "non-standard (possibly median-count / scanpy default)"
+
+    # negative values -> z-scored / scaled data
+    if vmin < -tol:
+        return {
+            "kind": "scaled",
+            "target_sum": None,
+            "details": (
+                f"contains negative values (min={vmin:.3g}, max={vmax:.3g}); "
+                "looks z-scored, e.g. sc.pp.scale"
+            ),
+        }
+
+    # non-negative integers -> raw counts
+    if np.allclose(data, np.round(data), atol=tol):
+        return {
+            "kind": "counts",
+            "target_sum": None,
+            "details": f"all values are non-negative integers (max={vmax:.0f})",
+        }
+
+    # small non-integer values -> most likely log1p transformed
+    if vmax < 50:
+        if scipy.sparse.issparse(X):
+            expm1_sums = np.asarray(X.expm1().sum(axis=1)).ravel()
+        else:
+            expm1_sums = np.expm1(X).sum(axis=1)
+
+        target = _const_target(expm1_sums)
+        if target is not None:
+            return {
+                "kind": "log1p_normalised",
+                "target_sum": target,
+                "details": (
+                    f"log1p of normalised counts; per-cell target sum ~{target:.0f} "
+                    f"[{_label_target(target)}]"
+                ),
+            }
+
+        # logged but library sizes vary: check whether it is log1p of raw counts
+        undone = np.expm1(data)
+        if np.allclose(undone, np.round(undone), atol=tol):
+            return {
+                "kind": "log1p_counts",
+                "target_sum": None,
+                "details": "log1p of raw counts (integers after expm1), not normalised",
+            }
+
+        return {
+            "kind": "unknown",
+            "target_sum": None,
+            "details": (
+                f"small non-integer values (max={vmax:.3g}) but per-cell sums vary and "
+                "are not log1p of integers; possibly CLR/other transform"
+            ),
+        }
+
+    # large non-integer values -> normalised but not logged
+    target = _const_target(row_sums)
+    if target is not None:
+        return {
+            "kind": "normalised",
+            "target_sum": target,
+            "details": (
+                f"normalised (not logged); per-cell target sum ~{target:.0f} "
+                f"[{_label_target(target)}]"
+            ),
+        }
+
+    return {
+        "kind": "unknown",
+        "target_sum": None,
+        "details": (
+            f"non-integer values (max={vmax:.3g}) with varying per-cell sums; "
+            "could not match a known counts/normalisation scheme"
+        ),
+    }
+
+
+def guess_human_or_mouse(adata, column=None):
     """Guess if data is human or mouse based on mitochondrial gene names.
 
     Parameters
     ----------
     adata : AnnData
         Annotated data matrix containing RNA expression data.
+    column : str, optional
+        Column name in `adata.var` to use for gene names. If None, uses `adata.var_names`.
     """
     # pick n random var_names and see if mostly uppercase (else assume capitalized)
     pick_n = 50
-    var_names_sample = np.random.choice(adata.var_names, size=pick_n, replace=False)
+    if column is not None and column in adata.var.columns:
+        var_names_sample = np.random.choice(adata.var[column], size=pick_n, replace=False)
+    else:
+        var_names_sample = np.random.choice(adata.var_names, size=pick_n, replace=False)
     n_caps = 0
     for g in var_names_sample:
         if g.isupper():
