@@ -1104,6 +1104,16 @@ def dc_get_pseudobulk(
     group="group",
     obsm_plot=True,
     obsm_dendrogram=True,
+    counts_layer="counts",
+    min_counts=1000,
+    filter_min_count=10,
+    filter_min_total_count=15,
+    filter_large_n=10,
+    filter_min_prop=0.7,
+    filter_by_prop_min_prop=0.1,
+    filter_by_prop_min_samples=2,
+    diagnostic_plots=True,
+    compute_pca=True,
 ):
     """Create pseudobulk data from single-cell RNA data and perform PCA.
 
@@ -1121,41 +1131,56 @@ def dc_get_pseudobulk(
         Whether to do `dc.tl.rankby_obsm` and `dc.pl.obsm`(default is True).
     obsm_dendrogram : bool, optional
         Whether to include a dendrogram in the obsm heatmap plot (default is True).
+    counts_layer : str, optional
+        Layer containing raw counts (default is ``"counts"``).
+    min_counts : int, optional
+        Minimum total pseudobulk counts per sample (default is 1000).
+    filter_min_count, filter_min_total_count, filter_large_n, filter_min_prop : optional
+        Arguments passed to ``decoupler.pp.filter_by_expr``.
+    filter_by_prop_min_prop, filter_by_prop_min_samples : optional
+        Arguments passed to ``decoupler.pp.filter_by_prop``.
+    diagnostic_plots : bool, optional
+        Draw sample and gene-filter diagnostic plots (default is True).
+    compute_pca : bool, optional
+        Compute normalised PCA summaries before restoring raw counts. Set False
+        for a quiet DE-only workflow (default is True).
     """
     pdata = dc.pp.pseudobulk(
         adata=adata,
         sample_col=sample,
         groups_col=group,
-        layer="counts",
+        layer=counts_layer,
         mode="sum",
     )
 
-    dc.pl.filter_samples(
-        adata=pdata,
-        groupby=[sample],
-        min_cells=min_cells,
-        min_counts=1000,
-        figsize=(5, 8),
-    )
+    if diagnostic_plots:
+        dc.pl.filter_samples(
+            adata=pdata,
+            groupby=[sample],
+            min_cells=min_cells,
+            min_counts=min_counts,
+            figsize=(5, 8),
+        )
 
-    dc.pp.filter_samples(pdata, min_cells=min_cells, min_counts=1000)
+    dc.pp.filter_samples(pdata, min_cells=min_cells, min_counts=min_counts)
 
-    dc.pl.obsbar(adata=pdata, y=group, hue=sample, figsize=(6, 3))
+    if diagnostic_plots:
+        dc.pl.obsbar(adata=pdata, y=group, hue=sample, figsize=(6, 3))
 
-    # Store raw counts in layers
-    pdata.layers["counts"] = pdata.X.copy()
+    if compute_pca:
+        # Store raw counts while computing PCA on normalised values.
+        pdata.layers["counts"] = pdata.X.copy()
 
-    # Normalize, scale and compute pca
-    sc.pp.normalize_total(pdata, target_sum=1e4)
-    sc.pp.log1p(pdata)
-    sc.pp.scale(pdata, max_value=10)
-    sc.tl.pca(pdata)
+        sc.pp.normalize_total(pdata, target_sum=1e4)
+        sc.pp.log1p(pdata)
+        sc.pp.scale(pdata, max_value=10)
+        sc.tl.pca(pdata)
 
-    # Return raw counts to X
-    dc.pp.swap_layer(adata=pdata, key="counts", inplace=True)
+        # Return raw counts to X for DESeq2.
+        dc.pp.swap_layer(adata=pdata, key="counts", inplace=True)
 
     # print(pdata.obs)
-    if obsm_plot:
+    if obsm_plot and compute_pca:
         dc.tl.rankby_obsm(pdata, key="X_pca")
 
         # sc.pl.pca_variance_ratio(pdata)
@@ -1179,37 +1204,38 @@ def dc_get_pseudobulk(
     #     frameon=True,
     # )
 
-    dc.pl.filter_by_expr(
-        adata=pdata,
-        group=group,
-        min_count=10,
-        min_total_count=15,
-        large_n=10,
-        min_prop=0.7,
-    )
-    dc.pl.filter_by_prop(
-        adata=pdata,
-        min_prop=0.1,
-        min_smpls=2,
-    )
+    if diagnostic_plots:
+        dc.pl.filter_by_expr(
+            adata=pdata,
+            group=group,
+            min_count=filter_min_count,
+            min_total_count=filter_min_total_count,
+            large_n=filter_large_n,
+            min_prop=filter_min_prop,
+        )
+        dc.pl.filter_by_prop(
+            adata=pdata,
+            min_prop=filter_by_prop_min_prop,
+            min_smpls=filter_by_prop_min_samples,
+        )
 
     dc.pp.filter_by_expr(
         adata=pdata,
         group=group,
-        min_count=10,
-        min_total_count=15,
-        large_n=10,
-        min_prop=0.7,
+        min_count=filter_min_count,
+        min_total_count=filter_min_total_count,
+        large_n=filter_large_n,
+        min_prop=filter_min_prop,
     )
     dc.pp.filter_by_prop(
         adata=pdata,
-        min_prop=0.1,
-        min_smpls=2,
+        min_prop=filter_by_prop_min_prop,
+        min_smpls=filter_by_prop_min_samples,
     )
     return pdata, fig
 
 
-def dc_deseq_deg(pdata, design, contrast):
+def dc_deseq_deg(pdata, design, contrast, n_cpus=8):
     """Perform differential expression analysis using DESeq2 via decoupler.
 
     Parameters
@@ -1220,8 +1246,10 @@ def dc_deseq_deg(pdata, design, contrast):
         The design formula for the DESeq2 analysis.
     contrast : str
         The contrast to use for the differential expression analysis.
+    n_cpus : int, optional
+        Number of CPUs used by pydeseq2 inference (default is 8).
     """
-    inference = DefaultInference(n_cpus=8)
+    inference = DefaultInference(n_cpus=n_cpus)
     dds = DeseqDataSet(
         adata=pdata,
         design=design,

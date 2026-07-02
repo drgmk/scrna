@@ -34,6 +34,7 @@ dependencies = [
     "cellphonedb",
     "celltypist",
     "decoupler",
+    "liana",
     "pydeseq2",
     "fpdf2",
     "pdf2image",

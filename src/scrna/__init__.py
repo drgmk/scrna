@@ -9,6 +9,7 @@ from . import functions
 from . import scanpy_gpu_helper
 from . import celltypemarkers
 from . import plotting
+from . import liana_mnn_scoring
 # from . import hgtc_classes  # don't do by default
 
 __version__ = "0.1.0"
